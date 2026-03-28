@@ -1,0 +1,172 @@
+[
+  {
+    "id": "hard_001",
+    "category": "performance",
+    "description": "Detect and fix N+1 query pattern: query fetches all users then runs a subquery per user inside SELECT, causing O(n) database hits.",
+    "buggy_query": "SELECT id, name, (SELECT COUNT(*) FROM orders WHERE user_id = u.id) as order_count, (SELECT SUM(total) FROM orders WHERE user_id = u.id) as total_spent FROM users u",
+    "fixed_query": "SELECT u.id, u.name, COUNT(o.id) as order_count, COALESCE(SUM(o.total), 0) as total_spent FROM users u LEFT JOIN orders o ON u.id = o.user_id GROUP BY u.id, u.name",
+    "error_message": "No error thrown — query is functionally correct but causes severe performance degradation at scale (O(n) subqueries)",
+    "database_schema": {
+      "users":  ["id INT PRIMARY KEY", "name VARCHAR(100)", "email VARCHAR(100)"],
+      "orders": ["id INT PRIMARY KEY", "user_id INT REFERENCES users(id)", "total DECIMAL", "status VARCHAR(20)"]
+    },
+    "performance_issue": {
+      "type": "N+1 query",
+      "impact": "With 10,000 users: 20,001 database round trips vs 1",
+      "execution_time_buggy_ms": 8500,
+      "execution_time_fixed_ms": 45
+    },
+    "expected_output": [
+      {"id": 1, "name": "Alice", "order_count": 3, "total_spent": 750.00},
+      {"id": 2, "name": "Bob",   "order_count": 0, "total_spent": 0.00}
+    ],
+    "error_type": "performance",
+    "error_location": "Correlated subqueries in SELECT clause",
+    "fix_description": "Replace correlated subqueries with a single LEFT JOIN + GROUP BY aggregation using COALESCE for null safety",
+    "estimated_fix_steps": 6,
+    "scoring_rubric": {
+      "identifies_n_plus_1_pattern": 0.15,
+      "identifies_correlated_subquery_cause": 0.1,
+      "proposes_join_solution": 0.1,
+      "correct_left_join": 0.1,
+      "correct_aggregation": 0.1,
+      "coalesce_null_safety": 0.05,
+      "explanation_quality": 0.1,
+      "confidence": 0.05
+    },
+    "frontier_model_expected_score": 0.15
+  },
+  {
+    "id": "hard_002",
+    "category": "performance",
+    "description": "Fix missing index causing full table scan: query filters on non-indexed column in 10M row table, fix by identifying missing index and rewriting with index-friendly pattern.",
+    "buggy_query": "SELECT * FROM logs WHERE YEAR(created_at) = 2024 AND MONTH(created_at) = 3",
+    "fixed_query": "SELECT * FROM logs WHERE created_at >= '2024-03-01' AND created_at < '2024-04-01'",
+    "error_message": "No error thrown — runs but causes full table scan because function on indexed column prevents index use",
+    "database_schema": {
+      "logs": ["id BIGINT PRIMARY KEY", "user_id INT", "action VARCHAR(100)", "created_at TIMESTAMP", "INDEX(created_at)"]
+    },
+    "performance_issue": {
+      "type": "Function on indexed column prevents index use (full table scan)",
+      "impact": "10M row table: full scan 12s vs index seek 8ms",
+      "execution_time_buggy_ms": 12000,
+      "execution_time_fixed_ms": 8,
+      "rows_scanned_buggy": 10000000,
+      "rows_scanned_fixed": 85000
+    },
+    "expected_output": "Same rows — functionally equivalent but uses index",
+    "error_type": "performance",
+    "error_location": "WHERE clause: YEAR() and MONTH() functions prevent index usage on created_at",
+    "fix_description": "Replace function-wrapped column with range comparison using explicit date literals so the index on created_at is used",
+    "estimated_fix_steps": 5,
+    "scoring_rubric": {
+      "identifies_function_on_column_issue": 0.15,
+      "identifies_index_not_used": 0.15,
+      "correct_range_rewrite": 0.15,
+      "correct_date_boundaries": 0.1,
+      "explanation_quality": 0.1,
+      "confidence": 0.05
+    },
+    "frontier_model_expected_score": 0.12
+  },
+  {
+    "id": "hard_003",
+    "category": "performance",
+    "description": "Fix implicit cartesian product: missing JOIN condition between two large tables causes cross join — billions of rows.",
+    "buggy_query": "SELECT c.name, o.total FROM customers c, orders o WHERE o.total > 1000",
+    "fixed_query": "SELECT c.name, o.total FROM customers c JOIN orders o ON c.id = o.customer_id WHERE o.total > 1000",
+    "error_message": "No error thrown — query returns astronomically wrong result set (cartesian product)",
+    "database_schema": {
+      "customers": ["id INT PRIMARY KEY", "name VARCHAR(100)", "country VARCHAR(50)"],
+      "orders":    ["id INT PRIMARY KEY", "customer_id INT REFERENCES customers(id)", "total DECIMAL", "status VARCHAR(20)"]
+    },
+    "performance_issue": {
+      "type": "Implicit cartesian product (missing JOIN condition)",
+      "impact": "50K customers × 200K orders = 10 billion intermediate rows",
+      "execution_time_buggy_ms": 999999,
+      "execution_time_fixed_ms": 120
+    },
+    "expected_output": [
+      {"name": "Alice Corp", "total": 15000.00},
+      {"name": "Bob Ltd",    "total": 3200.00}
+    ],
+    "error_type": "performance",
+    "error_location": "FROM clause — two tables listed with comma but no JOIN condition",
+    "fix_description": "Replace implicit comma join with explicit JOIN ON c.id = o.customer_id to eliminate cartesian product",
+    "estimated_fix_steps": 5,
+    "scoring_rubric": {
+      "identifies_cartesian_product": 0.15,
+      "identifies_missing_join_condition": 0.15,
+      "correct_explicit_join": 0.15,
+      "correct_join_condition": 0.1,
+      "explanation_quality": 0.1,
+      "confidence": 0.05
+    },
+    "frontier_model_expected_score": 0.18
+  },
+  {
+    "id": "hard_004",
+    "category": "performance",
+    "description": "Fix SELECT * in JOIN query causing unnecessary data transfer and preventing covering index: rewrite to select only needed columns.",
+    "buggy_query": "SELECT * FROM orders o JOIN users u ON o.user_id = u.id JOIN products p ON o.product_id = p.id WHERE o.status = 'pending'",
+    "fixed_query": "SELECT o.id, o.total, o.status, u.name as user_name, u.email, p.name as product_name, p.price FROM orders o JOIN users u ON o.user_id = u.id JOIN products p ON o.product_id = p.id WHERE o.status = 'pending'",
+    "error_message": "No error — functionally correct but causes over-fetching, prevents covering index, increases memory pressure",
+    "database_schema": {
+      "orders":   ["id INT PRIMARY KEY", "user_id INT", "product_id INT", "total DECIMAL", "status VARCHAR(20)", "created_at TIMESTAMP", "updated_at TIMESTAMP", "notes TEXT"],
+      "users":    ["id INT PRIMARY KEY", "name VARCHAR(100)", "email VARCHAR(100)", "password_hash VARCHAR(255)", "created_at TIMESTAMP"],
+      "products": ["id INT PRIMARY KEY", "name VARCHAR(100)", "price DECIMAL", "stock INT", "description TEXT", "image_url VARCHAR(500)"]
+    },
+    "performance_issue": {
+      "type": "SELECT * with JOINs causes over-fetching and prevents covering index",
+      "impact": "Fetches 15+ columns per row including TEXT blobs vs 7 needed columns. 3x memory overhead.",
+      "execution_time_buggy_ms": 890,
+      "execution_time_fixed_ms": 210
+    },
+    "error_type": "performance",
+    "error_location": "SELECT * across 3-table JOIN",
+    "fix_description": "Replace SELECT * with explicit column list selecting only the 7 columns actually needed by the application",
+    "estimated_fix_steps": 5,
+    "scoring_rubric": {
+      "identifies_select_star_issue": 0.15,
+      "identifies_over_fetching": 0.1,
+      "identifies_covering_index_benefit": 0.1,
+      "correct_column_selection": 0.15,
+      "correct_table_aliases": 0.1,
+      "explanation_quality": 0.1,
+      "confidence": 0.05
+    },
+    "frontier_model_expected_score": 0.20
+  },
+  {
+    "id": "hard_005",
+    "category": "performance",
+    "description": "Fix window function misuse: ROW_NUMBER() applied without PARTITION causing global ranking instead of per-department ranking, and without ORDER BY making results non-deterministic.",
+    "buggy_query": "SELECT id, name, department, salary, ROW_NUMBER() OVER () as rank FROM employees WHERE ROW_NUMBER() OVER () <= 3",
+    "fixed_query": "SELECT id, name, department, salary, rank FROM (SELECT id, name, department, salary, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) as rank FROM employees) ranked WHERE rank <= 3",
+    "error_message": "ERROR: window functions are not allowed in WHERE clause",
+    "database_schema": {
+      "employees": ["id INT PRIMARY KEY", "name VARCHAR(100)", "department VARCHAR(50)", "salary DECIMAL", "hire_date DATE"]
+    },
+    "expected_output": [
+      {"id": 3,  "name": "Carol", "department": "Engineering", "salary": 120000, "rank": 1},
+      {"id": 7,  "name": "Dave",  "department": "Engineering", "salary": 110000, "rank": 2},
+      {"id": 12, "name": "Eve",   "department": "Marketing",   "salary": 95000,  "rank": 1}
+    ],
+    "error_type": "performance",
+    "error_location": "Window function in WHERE clause and missing PARTITION BY + ORDER BY",
+    "fix_description": "Wrap in subquery to filter on window function result, add PARTITION BY department and ORDER BY salary DESC for correct per-department ranking",
+    "estimated_fix_steps": 7,
+    "scoring_rubric": {
+      "identifies_window_in_where_error": 0.1,
+      "identifies_missing_partition_by": 0.1,
+      "identifies_missing_order_by": 0.1,
+      "correct_subquery_wrapper": 0.1,
+      "correct_partition_by": 0.1,
+      "correct_order_by": 0.1,
+      "correct_where_on_subquery": 0.1,
+      "explanation_quality": 0.1,
+      "confidence": 0.05
+    },
+    "frontier_model_expected_score": 0.10
+  }
+]
