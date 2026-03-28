@@ -1,0 +1,37 @@
+# Environment variables — NEVER commit real keys
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Pytest cache
+.pytest_cache/
+*.pytest_cache
+
+# VS Code
+.vscode/
+
+# Docker
+*.tar
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files we don't need in prod
+test_*.py
+
+# Distribution
+dist/
+build/
+*.egg-info/

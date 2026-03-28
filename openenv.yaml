@@ -1,0 +1,108 @@
+name: sql-query-debugger
+version: '1.0.0'
+description: 'An OpenEnv environment where AI agents learn to debug SQL queries across syntax errors, logic bugs, and performance issues'
+tags: [openenv, real-world, sql, debugging, performance, reinforcement-learning]
+
+tasks:
+  - id: easy_001
+    difficulty: easy
+    description: 'Fix SQL syntax error: missing commas in SELECT clause'
+
+  - id: easy_002
+    difficulty: easy
+    description: 'Fix SQL syntax error: missing WHERE keyword'
+
+  - id: easy_003
+    difficulty: easy
+    description: 'Fix SQL syntax error: unclosed string literal'
+
+  - id: easy_004
+    difficulty: easy
+    description: 'Fix SQL syntax error: ORDER used instead of ORDER BY'
+
+  - id: easy_005
+    difficulty: easy
+    description: 'Fix SQL syntax error: GROUP used instead of GROUP BY'
+
+  - id: medium_001
+    difficulty: medium
+    description: 'Fix wrong JOIN type: INNER JOIN excludes users with no orders'
+
+  - id: medium_002
+    difficulty: medium
+    description: 'Fix wrong JOIN condition causing incorrect product associations'
+
+  - id: medium_003
+    difficulty: medium
+    description: 'Fix aggregation logic: HAVING clause used incorrectly as WHERE'
+
+  - id: medium_004
+    difficulty: medium
+    description: 'Fix correlated subquery correlating on wrong column'
+
+  - id: medium_005
+    difficulty: medium
+    description: 'Fix DISTINCT misuse with COUNT causing invalid query'
+
+  - id: hard_001
+    difficulty: hard
+    description: 'Detect and fix N+1 query pattern with correlated subqueries'
+
+  - id: hard_002
+    difficulty: hard
+    description: 'Fix function on indexed column preventing index usage'
+
+  - id: hard_003
+    difficulty: hard
+    description: 'Fix implicit cartesian product from missing JOIN condition'
+
+  - id: hard_004
+    difficulty: hard
+    description: 'Fix SELECT * in multi-table JOIN causing over-fetching'
+
+  - id: hard_005
+    difficulty: hard
+    description: 'Fix window function misuse with missing PARTITION BY and ORDER BY'
+
+action_space:
+  type: discrete
+  actions:
+    - identify_error
+    - propose_fix
+    - submit_answer
+    - request_hint
+    - explain_issue
+    - optimize_query
+
+observation_space:
+  type: dict
+  fields:
+    - task_id
+    - task_description
+    - current_context
+    - step_count
+    - difficulty
+    - max_steps
+    - hints_used
+    - previous_actions
+
+reward:
+  min: -1.0
+  max: 1.0
+  type: dense
+  description: 'Dense reward signal at every step. Partial credit for identification, fixing, and explanation quality.'
+
+episode:
+  max_steps: 20
+  termination: 'submit_answer or optimize_query action, or max_steps reached'
+
+api:
+  port: 7860
+  endpoints:
+    - GET  /health
+    - POST /reset
+    - POST /step
+    - GET  /state
+    - GET  /tasks
+    - POST /grader
+    - POST /baseline
