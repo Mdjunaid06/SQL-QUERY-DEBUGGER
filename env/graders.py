@@ -132,7 +132,7 @@ def grade_easy(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     """
     # Edge case: null or malformed action
     if action is None or action.payload is None:
-        return 0.0, {"error": "null_action"}, "No action provided."
+        return 0.001, {"error": "null_action"}, "No action provided."
 
     payload = action.payload
     score   = 0.0
@@ -197,7 +197,7 @@ def grade_easy(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     # ── 6. Hint penalty ──────────────────────────────────────────
     # Hint penalty is applied in reward.py, not here
 
-    final_score = round(min(score, 0.999), 4)
+    final_score = round(max(min(score, 0.999), 0.001), 4)
     feedback    = " ".join(feedback_parts) if feedback_parts else "No valid response provided."
     return final_score, breakdown, feedback
 
@@ -288,7 +288,7 @@ def grade_medium(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     else:
         breakdown["impact_analysis"] = 0.0
 
-    final_score = round(min(score, 0.999), 4)
+    final_score = round(max(min(score, 0.999), 0.001), 4)
     feedback    = " ".join(feedback_parts) if feedback_parts else "No valid response provided."
     return final_score, breakdown, feedback
 
@@ -399,7 +399,7 @@ def grade_hard(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
 
     # Hard cap: frontier model should score ~0.10-0.20
     # We do NOT artificially cap — the rubric naturally produces low scores
-    final_score = round(min(score, 0.999), 4)
+    final_score = round(max(min(score, 0.999), 0.001), 4)
     feedback    = " ".join(feedback_parts) if feedback_parts else "Performance issue not identified."
     return final_score, breakdown, feedback
 
@@ -421,7 +421,7 @@ def grade(action: Action, task_id: str) -> tuple[float, dict, str]:
     # Edge case: unknown task
     ground_truth = task_manager.get_ground_truth(task_id)
     if ground_truth is None:
-        return 0.0, {"error": "unknown_task"}, f"Task '{task_id}' not found."
+        return 0.001, {"error": "unknown_task"}, f"Task '{task_id}' not found."
 
     # Dispatch by difficulty
     difficulty = ground_truth.get("id", "").split("_")[0]
@@ -437,4 +437,4 @@ def grade(action: Action, task_id: str) -> tuple[float, dict, str]:
             return 0.0, {"error": "unknown_difficulty"}, f"Unknown difficulty: {difficulty}"
     except Exception as e:
         # Never crash — return 0.0 with error info
-        return 0.0, {"error": str(e)}, f"Grader error: {str(e)}"
+        return 0.001, {"error": str(e)}, f"Grader error: {str(e)}"
