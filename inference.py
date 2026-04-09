@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 from env.environment import SQLDebuggerEnvironment
+from env.models import Action, ActionType, DifficultyLevel
 # ─────────────────────────────────────────────
 #  ENVIRONMENT VARIABLES
 # ─────────────────────────────────────────────
