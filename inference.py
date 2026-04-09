@@ -11,10 +11,11 @@ from typing import List, Optional
 
 from openai import OpenAI
 from dotenv import load_dotenv
-load_dotenv() 
+load_dotenv()
 
 from env.environment import SQLDebuggerEnvironment
 from env.models import Action, ActionType, DifficultyLevel
+
 # ─────────────────────────────────────────────
 #  ENVIRONMENT VARIABLES
 # ─────────────────────────────────────────────
@@ -25,19 +26,33 @@ HF_TOKEN     = os.getenv("HF_TOKEN")
 if HF_TOKEN is None:
     raise ValueError("HF_TOKEN environment variable is required")
 
-API_KEY = HF_TOKEN
-BENCHMARK    = "sql-query-debugger"
-MAX_STEPS    = 10
+API_KEY           = HF_TOKEN
+BENCHMARK         = "sql-query-debugger"
+MAX_STEPS         = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
+
+# ─────────────────────────────────────────────
+#  LOGGING FUNCTIONS
 # ─────────────────────────────────────────────
 
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val  = str(done).lower()
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+
+
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+
+
+# ─────────────────────────────────────────────
+#  SYSTEM PROMPT
+# ─────────────────────────────────────────────
 
 SYSTEM_PROMPT = textwrap.dedent("""
     You are an expert SQL debugger. You will be given a buggy SQL query and must fix it.
@@ -113,7 +128,6 @@ def get_llm_action(client: OpenAI, obs, step: int) -> Action:
         )
         text = (completion.choices[0].message.content or "").strip()
 
-        # Parse JSON response
         # Remove markdown code blocks if present
         if "```" in text:
             text = text.split("```")[1]
@@ -150,7 +164,6 @@ def get_llm_action(client: OpenAI, obs, step: int) -> Action:
 
     except Exception as exc:
         print(f"[DEBUG] LLM call failed: {exc}", flush=True)
-        # Fallback to identify_error action
         return Action(
             action_type=ActionType.IDENTIFY_ERROR,
             payload={
@@ -162,17 +175,17 @@ def get_llm_action(client: OpenAI, obs, step: int) -> Action:
 
 
 # ─────────────────────────────────────────────
-#  MAIN INFERENCE LOOP
+#  EPISODE RUNNER
 # ─────────────────────────────────────────────
 
 def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
     """Run one full episode and return results."""
-    env      = SQLDebuggerEnvironment()
-    obs      = env.reset(difficulty=difficulty, task_id=task_id)
-    rewards  = []
-    steps    = 0
-    success  = False
-    score    = 0.001  # Initialize to minimum valid score
+    env     = SQLDebuggerEnvironment()
+    obs     = env.reset(difficulty=difficulty, task_id=task_id)
+    rewards = []
+    steps   = 0
+    success = False
+    score   = 0.0
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
@@ -181,10 +194,9 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
             if env.state().done:
                 break
 
-            # Get action from LLM
-            action       = get_llm_action(client, obs, step)
-            action_str   = f"{action.action_type.value}"
-            error_str    = None
+            action     = get_llm_action(client, obs, step)
+            action_str = action.action_type.value
+            error_str  = None
 
             try:
                 resp   = env.step(action)
@@ -192,8 +204,8 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
                 done   = resp.done
                 obs    = resp.observation
             except Exception as e:
-                reward   = -0.1
-                done     = False
+                reward    = -0.1
+                done      = False
                 error_str = str(e)[:100]
 
             rewards.append(reward)
@@ -210,20 +222,22 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
             if done:
                 break
 
-        # Calculate score
+        # Score must be strictly between 0 and 1 (not 0.0, not 1.0)
         total_reward = sum(rewards)
-        score        = min(max(total_reward / MAX_STEPS, 0.001), 0.999)
-        success      = score >= SUCCESS_SCORE_THRESHOLD
+        raw_score    = total_reward / MAX_STEPS if MAX_STEPS > 0 else 0.0
+        # Clamp strictly between 0 and 1 exclusive
+        score   = max(0.001, min(0.999, raw_score))
+        success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as e:
         print(f"[DEBUG] Episode error: {e}", flush=True)
-        error_str = str(e)[:100]
+        score   = 0.001
+        success = False
 
     finally:
         log_end(
             success = success,
             steps   = steps,
-            score   = score,
             rewards = rewards
         )
 
@@ -235,6 +249,10 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
         "success":    success,
     }
 
+
+# ─────────────────────────────────────────────
+#  MAIN
+# ─────────────────────────────────────────────
 
 def main():
     """Main entry point — runs inference on all 3 difficulty levels."""
@@ -254,7 +272,6 @@ def main():
         result = run_episode(client, difficulty, task_id)
         results.append(result)
 
-    # Final summary
     avg_score = sum(r["score"] for r in results) / len(results)
     print(f"\n[DEBUG] Average Score: {avg_score:.3f}", flush=True)
     for r in results:
