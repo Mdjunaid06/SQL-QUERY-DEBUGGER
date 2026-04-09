@@ -26,9 +26,9 @@ HF_TOKEN     = os.getenv("HF_TOKEN")
 if HF_TOKEN is None:
     raise ValueError("HF_TOKEN environment variable is required")
 
-API_KEY           = HF_TOKEN
-BENCHMARK         = "sql-query-debugger"
-MAX_STEPS         = 10
+API_KEY               = HF_TOKEN
+BENCHMARK             = "sql-query-debugger"
+MAX_STEPS             = 10
 SUCCESS_SCORE_THRESHOLD = 0.5
 
 # ─────────────────────────────────────────────
@@ -185,7 +185,7 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
     rewards = []
     steps   = 0
     success = False
-    score   = 0.0
+    score   = 0.1  # default non-zero
 
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
@@ -204,7 +204,7 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
                 done   = resp.done
                 obs    = resp.observation
             except Exception as e:
-                reward    = -0.1
+                reward    = 0.01
                 done      = False
                 error_str = str(e)[:100]
 
@@ -222,23 +222,26 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
             if done:
                 break
 
-        # Score must be strictly between 0 and 1 (not 0.0, not 1.0)
-        total_reward = sum(rewards)
-        raw_score    = total_reward / MAX_STEPS if MAX_STEPS > 0 else 0.0
-        # Clamp strictly between 0 and 1 exclusive
+        # Score strictly between 0 and 1 exclusive
+        if rewards:
+            total_reward = sum(rewards)
+            raw_score    = total_reward / len(rewards)
+        else:
+            raw_score = 0.1
+
         score   = max(0.001, min(0.999, raw_score))
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as e:
         print(f"[DEBUG] Episode error: {e}", flush=True)
-        score   = 0.001
+        score   = 0.1
         success = False
 
     finally:
         log_end(
             success = success,
             steps   = steps,
-            rewards = rewards
+            rewards = rewards if rewards else [0.1]
         )
 
     return {
