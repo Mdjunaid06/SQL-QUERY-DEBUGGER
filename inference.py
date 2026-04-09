@@ -208,7 +208,7 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
 
         # Calculate score
         total_reward = sum(rewards)
-        score        = min(max(total_reward / MAX_STEPS, 0.0), 1.0)
+        score        = min(max(total_reward / MAX_STEPS, 0.001), 0.999)
         success      = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as e:
