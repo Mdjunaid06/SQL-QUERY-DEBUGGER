@@ -20,10 +20,10 @@ def _safe_get(payload: dict, key: str, default=None):
 def _score_explanation(explanation: str) -> float:
     """Score explanation quality by length and keyword richness."""
     if not explanation or not isinstance(explanation, str):
-        return 0.0
+        return 0.001
     explanation = explanation.strip()
     if len(explanation) < 10:
-        return 0.0
+        return 0.001
     if len(explanation) < 30:
         return 0.05
     if len(explanation) < 80:
@@ -38,7 +38,7 @@ def _score_confidence(confidence) -> float:
             return 0.05
     except (TypeError, ValueError):
         pass
-    return 0.0
+    return 0.001
 
 def _query_similarity(submitted: str, expected: str) -> float:
     """
@@ -51,14 +51,14 @@ def _query_similarity(submitted: str, expected: str) -> float:
 
     # Exact match after normalization
     if s == e:
-        return 1.0
+        return 0.999
 
     # Tokenize and check keyword overlap
     s_tokens = set(s.split())
     e_tokens = set(e.split())
 
     if not e_tokens:
-        return 0.0
+        return 0.001
 
     overlap = len(s_tokens & e_tokens) / len(e_tokens)
 
@@ -68,7 +68,8 @@ def _query_similarity(submitted: str, expected: str) -> float:
     critical_score = critical_found / len(critical_keywords) if critical_keywords else 0.0
 
     # Weighted combination
-    return round((overlap * 0.4) + (critical_score * 0.6), 4)
+    similarity = round((overlap * 0.4) + (critical_score * 0.6), 4)
+    return max(min(similarity, 0.999), 0.001)
 
 def _extract_critical_keywords(query: str) -> list[str]:
     """Extract SQL keywords that are critical to correctness."""
@@ -90,7 +91,7 @@ def _extract_critical_keywords(query: str) -> list[str]:
 def _score_error_type(submitted_type: str, expected_type: str) -> float:
     """Score for correctly identifying the error type."""
     if not submitted_type:
-        return 0.0
+        return 0.001
     s = submitted_type.strip().lower()
     e = expected_type.strip().lower()
     if s == e:
@@ -104,12 +105,12 @@ def _score_error_type(submitted_type: str, expected_type: str) -> float:
     for canonical, aliases in related.items():
         if e == canonical and any(alias in s for alias in aliases):
             return 0.05
-    return 0.0
+    return 0.001
 
 def _score_error_location(submitted_location: str, expected_location: str) -> float:
     """Score for correctly identifying WHERE in the query the error is."""
     if not submitted_location or not expected_location:
-        return 0.0
+        return 0.001
     s = submitted_location.strip().lower()
     e = expected_location.strip().lower()
     if s == e:
@@ -118,7 +119,7 @@ def _score_error_location(submitted_location: str, expected_location: str) -> fl
     e_words = set(e.split())
     s_words = set(s.split())
     overlap = len(e_words & s_words) / len(e_words) if e_words else 0.0
-    return round(overlap * 0.10, 4)
+    return max(round(overlap * 0.10, 4), 0.001)
 
 
 #  GRADERS PER DIFFICULTY
@@ -210,7 +211,7 @@ def grade_medium(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     DETERMINISTIC: same input always returns same score.
     """
     if action is None or action.payload is None:
-        return 0.0, {"error": "null_action"}, "No action provided."
+        return 0.001, {"error": "null_action"}, "No action provided."
 
     payload   = action.payload
     score     = 0.0
@@ -255,7 +256,7 @@ def grade_medium(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     keywords_to_check = logic_keywords.get(error_type, logic_keywords["logic"])
     expl_lower        = explanation.lower()
     keyword_hits      = sum(1 for kw in keywords_to_check if kw in expl_lower)
-    logic_score       = min(keyword_hits * 0.05, 0.20)
+    logic_score       = max(min(keyword_hits * 0.05, 0.20), 0.001)
     score            += logic_score
     breakdown["logic_flaw_identification"] = round(logic_score, 4)
     if logic_score > 0:
@@ -286,7 +287,7 @@ def grade_medium(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
         breakdown["impact_analysis"] = 0.05
         feedback_parts.append("Impact analysis provided.")
     else:
-        breakdown["impact_analysis"] = 0.0
+        breakdown["impact_analysis"] = 0.001
 
     final_score = round(max(min(score, 0.999), 0.001), 4)
     feedback    = " ".join(feedback_parts) if feedback_parts else "No valid response provided."
@@ -301,13 +302,7 @@ def grade_hard(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
     DETERMINISTIC: same input always returns same score.
     """
     if action is None or action.payload is None:
-        return 0.0, {"error": "null_action"}, "No action provided."
-
-    payload   = action.payload
-    score     = 0.0
-    breakdown = {}
-    feedback_parts = []
-
+        return 0.001, {"error": "null_action"}, "No action provided."
     rubric = ground_truth.get("scoring_rubric", {})
 
     # ── 1. Query correctness (0.30) ──────────────────────────────
@@ -353,11 +348,11 @@ def grade_hard(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
         "window function":   ["window function", "partition by", "row_number", "subquery filter", "where clause window"]
     }
 
-    concept_score = 0.0
+    concept_score = 0.001
     for concept, keywords in performance_concept_map.items():
         if any(concept_part in issue_type for concept_part in concept.split()):
             hits = sum(1 for kw in keywords if kw in combined_text)
-            concept_score = min(hits * 0.06, 0.30)
+            concept_score = max(min(hits * 0.06, 0.30), 0.001)
             break
 
     score += concept_score
@@ -380,7 +375,7 @@ def grade_hard(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
         breakdown["root_cause_analysis"] = 0.10
         feedback_parts.append("Root cause analysis provided.")
     else:
-        breakdown["root_cause_analysis"] = 0.0
+        breakdown["root_cause_analysis"] = 0.001
 
     # ── 5. Expected improvement (0.10) ────────────────────────────
     improvement = str(_safe_get(payload, "expected_improvement", "") or "")
@@ -389,7 +384,7 @@ def grade_hard(action: Action, ground_truth: dict) -> tuple[float, dict, str]:
         breakdown["expected_improvement"] = 0.10
         feedback_parts.append("Performance improvement estimate provided.")
     else:
-        breakdown["expected_improvement"] = 0.0
+        breakdown["expected_improvement"] = 0.001
 
     # ── 6. Confidence (0.05) ──────────────────────────────────────
     confidence = _safe_get(payload, "confidence", None)
@@ -416,7 +411,7 @@ def grade(action: Action, task_id: str) -> tuple[float, dict, str]:
     """
     # Edge case: null action
     if action is None:
-        return 0.0, {"error": "null_action"}, "No action provided."
+        return 0.001, {"error": "null_action"}, "No action provided."
 
     # Edge case: unknown task
     ground_truth = task_manager.get_ground_truth(task_id)
@@ -434,7 +429,7 @@ def grade(action: Action, task_id: str) -> tuple[float, dict, str]:
         elif difficulty == "hard":
             return grade_hard(action, ground_truth)
         else:
-            return 0.0, {"error": "unknown_difficulty"}, f"Unknown difficulty: {difficulty}"
+            return 0.001, {"error": "unknown_difficulty"}, f"Unknown difficulty: {difficulty}"
     except Exception as e:
         # Never crash — return 0.0 with error info
         return 0.001, {"error": str(e)}, f"Grader error: {str(e)}"
