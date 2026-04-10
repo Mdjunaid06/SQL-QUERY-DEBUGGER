@@ -185,14 +185,22 @@ class GraderRequest(BaseModel):
     episode:  Optional[dict]   = None
 
 class GraderResponse(BaseModel):
-    score:    float = Field(..., gt=0.0, lt=1.0)
-    feedback: str
+    score:     float = Field(..., description="Score strictly between 0 and 1 exclusive")
+    feedback:  str
     breakdown: dict
 
     @field_validator("score")
     @classmethod
     def clamp_score(cls, v):
-        return max(0.001, min(0.999, round(v, 4)))
+        return max(0.001, min(0.999, round(float(v), 4)))
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "score": 0.75,
+            "feedback": "Correct fix applied.",
+            "breakdown": {"fix_correctness": 0.5, "explanation": 0.15, "confidence": 0.05}
+        }
+    }}
 
 class HealthResponse(BaseModel):
     status:  str = "ok"
