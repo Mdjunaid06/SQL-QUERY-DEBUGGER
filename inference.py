@@ -228,7 +228,8 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
         # Score strictly between 0 and 1 exclusive
         # Score strictly between 0 and 1 exclusive — never 0.0 or 1.0
         if rewards:
-            raw_score = sum(rewards) / len(rewards)
+            shifted = [max(0.01, min(0.99, (r + 1.0) / 2.0)) for r in rewards]
+            raw_score = sum(shifted) / len(shifted)
         else:
             raw_score = 0.5
 
@@ -242,7 +243,7 @@ def run_episode(client: OpenAI, difficulty: str, task_id: str) -> dict:
 
     finally:
         # Ensure rewards list for log_end is never empty
-        safe_rewards = rewards if rewards else [0.5]
+        safe_rewards = [max(0.01, min(0.99, (r + 1.0) / 2.0)) for r in rewards] if rewards else [0.5]
         log_end(
             success = success,
             steps   = steps,
