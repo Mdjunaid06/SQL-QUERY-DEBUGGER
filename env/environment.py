@@ -124,7 +124,7 @@ class SQLDebuggerEnvironment:
             obs = self.reset()
             return StepResponse(
                 observation=obs,
-                reward=Reward(score=0.0, breakdown={"auto_reset": True}, feedback="Environment auto-reset."),
+                reward=Reward(score=0.5, breakdown={"auto_reset": True}, feedback="Environment auto-reset."),
                 done=False,
                 info={"auto_reset": True}
             )
@@ -134,7 +134,7 @@ class SQLDebuggerEnvironment:
             obs = self._build_observation()
             return StepResponse(
                 observation=obs,
-                reward=Reward(score=0.0, breakdown={"episode_done": True}, feedback="Episode already finished. Call reset()."),
+                reward=Reward(score=0.5, breakdown={"episode_done": True}, feedback="Episode already finished. Call reset()."),
                 done=True,
                 info={"episode_done": True, "total_reward": self._state.total_reward}
             )
@@ -144,9 +144,9 @@ class SQLDebuggerEnvironment:
             self._state.step_count += 1
             obs = self._build_observation()
             reward = Reward(
-                score=-0.1,
-                breakdown={"invalid_action": -0.1},
-                feedback="Null or invalid action received. Penalty -0.1."
+                score=0.001,
+                breakdown={"invalid_action": 0.001},
+                feedback="Null or invalid action received."
             )
             self._state.last_reward   = -0.1
             self._state.total_reward  = round(self._state.total_reward - 0.1, 4)
@@ -215,6 +215,14 @@ class SQLDebuggerEnvironment:
                 "hints_used":   self._state.hints_used,
                 "duration_sec": round(time.time() - (self._started_at or time.time()), 2),
             }
+
+        # Normalize reward to strictly (0, 1) exclusive for validator compliance
+        normalized_score = max(0.001, min(0.999, (reward.score + 1.0) / 2.0))
+        reward = Reward(
+            score=normalized_score,
+            breakdown=reward.breakdown,
+            feedback=reward.feedback
+        )
 
         return StepResponse(observation=obs, reward=reward, done=done, info=info)
 
