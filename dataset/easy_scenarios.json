@@ -1,0 +1,92 @@
+[
+  {
+    "id": "easy_s001",
+    "description": "User lookup query taking 2s on 10K users table. Missing index on email column.",
+    "tables": [
+      {"name": "users", "rows": 10000, "indexes": ["PRIMARY"], "size_mb": 8}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM users WHERE email=?", "avg_ms": 2000, "main_table": "users", "rows_examined": 10000}
+    ],
+    "missing_index_hints": [
+      {"table": "users", "columns": ["email"], "reason": "email is used in WHERE clause but has no index"}
+    ],
+    "performance_score_baseline": 8.0,
+    "target_score": 80.0,
+    "max_steps": 15,
+    "optimal_actions": ["inspect_query:q1", "analyze_indexes:users", "create_index:users:email", "submit_report"],
+    "category": "indexing"
+  },
+  {
+    "id": "easy_s002",
+    "description": "Order status query scanning 50K orders. Composite index on user_id + status needed.",
+    "tables": [
+      {"name": "orders", "rows": 50000, "indexes": ["PRIMARY"], "size_mb": 120}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM orders WHERE user_id=? AND status=?", "avg_ms": 3500, "main_table": "orders", "rows_examined": 50000}
+    ],
+    "missing_index_hints": [
+      {"table": "orders", "columns": ["user_id", "status"], "reason": "Composite WHERE clause needs composite index"}
+    ],
+    "performance_score_baseline": 5.0,
+    "target_score": 85.0,
+    "max_steps": 15,
+    "optimal_actions": ["inspect_query:q1", "create_index:orders:user_id,status", "submit_report"],
+    "category": "indexing"
+  },
+  {
+    "id": "easy_s003",
+    "description": "Product search query doing full table scan on 20K products. Index on name column fixes it.",
+    "tables": [
+      {"name": "products", "rows": 20000, "indexes": ["PRIMARY"], "size_mb": 35}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT id, name, price FROM products WHERE name LIKE ?", "avg_ms": 1800, "main_table": "products", "rows_examined": 20000}
+    ],
+    "missing_index_hints": [
+      {"table": "products", "columns": ["name"], "reason": "LIKE queries benefit from index on name"}
+    ],
+    "performance_score_baseline": 10.0,
+    "target_score": 78.0,
+    "max_steps": 15,
+    "optimal_actions": ["inspect_query:q1", "create_index:products:name", "submit_report"],
+    "category": "indexing"
+  },
+  {
+    "id": "easy_s004",
+    "description": "Session lookup hitting 15K sessions table without index. Single index solves it.",
+    "tables": [
+      {"name": "sessions", "rows": 15000, "indexes": ["PRIMARY"], "size_mb": 12}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM sessions WHERE user_id=? AND expires_at > NOW()", "avg_ms": 1500, "main_table": "sessions", "rows_examined": 15000}
+    ],
+    "missing_index_hints": [
+      {"table": "sessions", "columns": ["user_id", "expires_at"], "reason": "Composite index on user_id + expires_at needed"}
+    ],
+    "performance_score_baseline": 12.0,
+    "target_score": 80.0,
+    "max_steps": 15,
+    "optimal_actions": ["inspect_query:q1", "create_index:sessions:user_id,expires_at", "submit_report"],
+    "category": "indexing"
+  },
+  {
+    "id": "easy_s005",
+    "description": "Log table growing to 30K entries. Query filtering by level and created_at is slow.",
+    "tables": [
+      {"name": "logs", "rows": 30000, "indexes": ["PRIMARY"], "size_mb": 50}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM logs WHERE level=? AND created_at > ?", "avg_ms": 2200, "main_table": "logs", "rows_examined": 30000}
+    ],
+    "missing_index_hints": [
+      {"table": "logs", "columns": ["level", "created_at"], "reason": "Compound filter needs compound index"}
+    ],
+    "performance_score_baseline": 7.8,
+    "target_score": 80.0,
+    "max_steps": 15,
+    "optimal_actions": ["inspect_query:q1", "create_index:logs:level,created_at", "submit_report"],
+    "category": "indexing"
+  }
+]

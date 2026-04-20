@@ -1,0 +1,185 @@
+[
+  {
+    "id": "hard_s001",
+    "description": "Financial DB: 500K transactions across 4 tables. 3 slow queries. Needs indexes, partition, and statistics.",
+    "tables": [
+      {"name": "transactions",  "rows": 500000, "indexes": ["PRIMARY"], "size_mb": 2400},
+      {"name": "accounts",      "rows": 50000,  "indexes": ["PRIMARY"], "size_mb": 80},
+      {"name": "customers",     "rows": 80000,  "indexes": ["PRIMARY"], "size_mb": 120},
+      {"name": "audit_log",     "rows": 1000000,"indexes": ["PRIMARY"], "size_mb": 5000}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM transactions WHERE account_id=? AND status=? AND created_at > ?", "avg_ms": 15000, "main_table": "transactions", "rows_examined": 500000},
+      {"id": "q2", "sql": "SELECT c.*, COUNT(t.id) FROM customers c, transactions t WHERE c.id = t.customer_id AND t.amount > ? GROUP BY c.id", "avg_ms": 22000, "main_table": "transactions", "rows_examined": 500000},
+      {"id": "q3", "sql": "SELECT * FROM audit_log WHERE entity_id=? AND entity_type=? ORDER BY created_at DESC LIMIT 100", "avg_ms": 18000, "main_table": "audit_log", "rows_examined": 1000000}
+    ],
+    "missing_index_hints": [
+      {"table": "transactions", "columns": ["account_id", "status", "created_at"], "reason": "Composite filter — high cardinality"},
+      {"table": "transactions", "columns": ["customer_id", "amount"], "reason": "JOIN + range filter"},
+      {"table": "audit_log",    "columns": ["entity_id", "entity_type", "created_at"], "reason": "Lookup + ORDER BY on huge table"}
+    ],
+    "performance_score_baseline": 4.2,
+    "target_score": 70.0,
+    "max_steps": 50,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2", "inspect_query:q3",
+      "analyze_indexes:transactions", "analyze_indexes:audit_log",
+      "create_index:transactions:account_id,status,created_at",
+      "create_index:transactions:customer_id,amount",
+      "create_index:audit_log:entity_id,entity_type,created_at",
+      "rewrite_query:q2:SELECT c.id, c.name, COUNT(t.id) as tx_count FROM customers c INNER JOIN transactions t ON c.id = t.customer_id WHERE t.amount > ? GROUP BY c.id, c.name",
+      "partition_table:audit_log",
+      "analyze_statistics:transactions",
+      "analyze_statistics:audit_log",
+      "submit_report"
+    ],
+    "category": "financial"
+  },
+  {
+    "id": "hard_s002",
+    "description": "SaaS platform: 8-table schema, 200K+ records. Dashboard queries taking 20s+. Full optimization campaign.",
+    "tables": [
+      {"name": "workspaces",    "rows": 5000,   "indexes": ["PRIMARY"], "size_mb": 10},
+      {"name": "users",         "rows": 80000,  "indexes": ["PRIMARY"], "size_mb": 120},
+      {"name": "projects",      "rows": 200000, "indexes": ["PRIMARY"], "size_mb": 450},
+      {"name": "tasks",         "rows": 800000, "indexes": ["PRIMARY"], "size_mb": 3000},
+      {"name": "comments",      "rows": 500000, "indexes": ["PRIMARY"], "size_mb": 1800},
+      {"name": "attachments",   "rows": 300000, "indexes": ["PRIMARY"], "size_mb": 900},
+      {"name": "activity_log",  "rows": 2000000,"indexes": ["PRIMARY"], "size_mb": 8000},
+      {"name": "notifications", "rows": 400000, "indexes": ["PRIMARY"], "size_mb": 600}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM tasks WHERE project_id=? AND assignee_id=? AND status != 'done' ORDER BY due_date ASC", "avg_ms": 20000, "main_table": "tasks", "rows_examined": 800000},
+      {"id": "q2", "sql": "SELECT * FROM activity_log WHERE workspace_id=? AND created_at > ? ORDER BY created_at DESC LIMIT 50", "avg_ms": 25000, "main_table": "activity_log", "rows_examined": 2000000},
+      {"id": "q3", "sql": "SELECT * FROM notifications WHERE user_id=? AND read=0", "avg_ms": 8000, "main_table": "notifications", "rows_examined": 400000}
+    ],
+    "missing_index_hints": [
+      {"table": "tasks",        "columns": ["project_id", "assignee_id", "status", "due_date"], "reason": "4-column filter + ORDER BY"},
+      {"table": "activity_log", "columns": ["workspace_id", "created_at"], "reason": "Range query on 2M row table — also partition candidate"},
+      {"table": "notifications","columns": ["user_id", "read"], "reason": "Hot path — unread notifications per user"}
+    ],
+    "performance_score_baseline": 3.8,
+    "target_score": 68.0,
+    "max_steps": 50,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2", "inspect_query:q3",
+      "analyze_indexes:tasks", "analyze_indexes:activity_log",
+      "create_index:tasks:project_id,assignee_id,status,due_date",
+      "create_index:activity_log:workspace_id,created_at",
+      "create_index:notifications:user_id,read",
+      "partition_table:activity_log",
+      "analyze_statistics:tasks",
+      "analyze_statistics:activity_log",
+      "submit_report"
+    ],
+    "category": "saas_platform"
+  },
+  {
+    "id": "hard_s003",
+    "description": "Healthcare DB: 1M patient records. Compliance queries + clinical search + audit trail all slow.",
+    "tables": [
+      {"name": "patients",        "rows": 1000000, "indexes": ["PRIMARY"], "size_mb": 4000},
+      {"name": "appointments",    "rows": 500000,  "indexes": ["PRIMARY"], "size_mb": 1500},
+      {"name": "prescriptions",   "rows": 800000,  "indexes": ["PRIMARY"], "size_mb": 2500},
+      {"name": "clinical_notes",  "rows": 1200000, "indexes": ["PRIMARY"], "size_mb": 6000}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM appointments WHERE patient_id=? AND doctor_id=? AND appointment_date BETWEEN ? AND ?", "avg_ms": 18000, "main_table": "appointments", "rows_examined": 500000},
+      {"id": "q2", "sql": "SELECT * FROM prescriptions WHERE patient_id=? AND medication_code=? AND prescribed_at > ?", "avg_ms": 14000, "main_table": "prescriptions", "rows_examined": 800000},
+      {"id": "q3", "sql": "SELECT * FROM clinical_notes WHERE patient_id=? ORDER BY created_at DESC LIMIT 20", "avg_ms": 22000, "main_table": "clinical_notes", "rows_examined": 1200000}
+    ],
+    "missing_index_hints": [
+      {"table": "appointments",  "columns": ["patient_id", "doctor_id", "appointment_date"], "reason": "Date range query + 2 foreign keys"},
+      {"table": "prescriptions", "columns": ["patient_id", "medication_code", "prescribed_at"], "reason": "Patient medication history"},
+      {"table": "clinical_notes","columns": ["patient_id", "created_at"], "reason": "Sorted history per patient on 1.2M rows"}
+    ],
+    "performance_score_baseline": 3.5,
+    "target_score": 68.0,
+    "max_steps": 50,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2", "inspect_query:q3",
+      "analyze_indexes:appointments", "analyze_indexes:clinical_notes",
+      "create_index:appointments:patient_id,doctor_id,appointment_date",
+      "create_index:prescriptions:patient_id,medication_code,prescribed_at",
+      "create_index:clinical_notes:patient_id,created_at",
+      "partition_table:clinical_notes",
+      "analyze_statistics:appointments",
+      "analyze_statistics:clinical_notes",
+      "submit_report"
+    ],
+    "category": "healthcare"
+  },
+  {
+    "id": "hard_s004",
+    "description": "Gaming leaderboard: 2M player records. Real-time ranking + history + match queries all degraded.",
+    "tables": [
+      {"name": "players",      "rows": 2000000, "indexes": ["PRIMARY"], "size_mb": 5000},
+      {"name": "matches",      "rows": 5000000, "indexes": ["PRIMARY"], "size_mb": 15000},
+      {"name": "leaderboards", "rows": 2000000, "indexes": ["PRIMARY"], "size_mb": 4000},
+      {"name": "achievements", "rows": 800000,  "indexes": ["PRIMARY"], "size_mb": 2000}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM leaderboards WHERE game_mode=? AND season=? ORDER BY score DESC LIMIT 100", "avg_ms": 30000, "main_table": "leaderboards", "rows_examined": 2000000},
+      {"id": "q2", "sql": "SELECT * FROM matches WHERE player_id=? AND game_mode=? AND played_at > ? ORDER BY played_at DESC", "avg_ms": 25000, "main_table": "matches", "rows_examined": 5000000},
+      {"id": "q3", "sql": "SELECT * FROM achievements WHERE player_id=? AND unlocked=1", "avg_ms": 12000, "main_table": "achievements", "rows_examined": 800000}
+    ],
+    "missing_index_hints": [
+      {"table": "leaderboards", "columns": ["game_mode", "season", "score"], "reason": "Sorted leaderboard by mode+season"},
+      {"table": "matches",      "columns": ["player_id", "game_mode", "played_at"], "reason": "Player history — 5M rows"},
+      {"table": "achievements", "columns": ["player_id", "unlocked"], "reason": "Unlocked achievements per player"}
+    ],
+    "performance_score_baseline": 2.8,
+    "target_score": 65.0,
+    "max_steps": 50,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2", "inspect_query:q3",
+      "analyze_indexes:leaderboards", "analyze_indexes:matches",
+      "create_index:leaderboards:game_mode,season,score",
+      "create_index:matches:player_id,game_mode,played_at",
+      "create_index:achievements:player_id,unlocked",
+      "partition_table:matches",
+      "analyze_statistics:leaderboards",
+      "analyze_statistics:matches",
+      "submit_report"
+    ],
+    "category": "gaming"
+  },
+  {
+    "id": "hard_s005",
+    "description": "Logistics platform: 6 tables, 3M shipment records. ETA queries, route optimization, and reporting all slow.",
+    "tables": [
+      {"name": "shipments",  "rows": 3000000, "indexes": ["PRIMARY"], "size_mb": 9000},
+      {"name": "routes",     "rows": 500000,  "indexes": ["PRIMARY"], "size_mb": 1500},
+      {"name": "drivers",    "rows": 100000,  "indexes": ["PRIMARY"], "size_mb": 200},
+      {"name": "vehicles",   "rows": 80000,   "indexes": ["PRIMARY"], "size_mb": 150},
+      {"name": "warehouses", "rows": 20000,   "indexes": ["PRIMARY"], "size_mb": 40},
+      {"name": "tracking",   "rows": 10000000,"indexes": ["PRIMARY"], "size_mb": 30000}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM shipments WHERE origin_warehouse=? AND status=? AND scheduled_at BETWEEN ? AND ?", "avg_ms": 28000, "main_table": "shipments", "rows_examined": 3000000},
+      {"id": "q2", "sql": "SELECT * FROM tracking WHERE shipment_id=? ORDER BY recorded_at DESC LIMIT 50", "avg_ms": 35000, "main_table": "tracking", "rows_examined": 10000000},
+      {"id": "q3", "sql": "SELECT d.*, COUNT(s.id) FROM drivers d, shipments s WHERE d.id = s.driver_id AND s.status='in_transit' GROUP BY d.id", "avg_ms": 20000, "main_table": "shipments", "rows_examined": 3000000}
+    ],
+    "missing_index_hints": [
+      {"table": "shipments", "columns": ["origin_warehouse", "status", "scheduled_at"], "reason": "3-column filter on 3M rows"},
+      {"table": "tracking",  "columns": ["shipment_id", "recorded_at"], "reason": "Lookup + sort on 10M row table — partition candidate"},
+      {"table": "shipments", "columns": ["driver_id", "status"], "reason": "JOIN + WHERE filter for driver stats"}
+    ],
+    "performance_score_baseline": 2.5,
+    "target_score": 65.0,
+    "max_steps": 50,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2", "inspect_query:q3",
+      "analyze_indexes:shipments", "analyze_indexes:tracking",
+      "create_index:shipments:origin_warehouse,status,scheduled_at",
+      "create_index:tracking:shipment_id,recorded_at",
+      "create_index:shipments:driver_id,status",
+      "rewrite_query:q3:SELECT d.id, d.name, COUNT(s.id) as active_shipments FROM drivers d INNER JOIN shipments s ON d.id = s.driver_id WHERE s.status='in_transit' GROUP BY d.id, d.name",
+      "partition_table:tracking",
+      "analyze_statistics:shipments",
+      "analyze_statistics:tracking",
+      "submit_report"
+    ],
+    "category": "logistics"
+  }
+]

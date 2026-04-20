@@ -1,0 +1,137 @@
+[
+  {
+    "id": "medium_s001",
+    "description": "E-commerce DB: 50K orders + 8K users. Two slow queries. Composite indexes + statistics update needed.",
+    "tables": [
+      {"name": "orders", "rows": 50000, "indexes": ["PRIMARY"], "size_mb": 280},
+      {"name": "users",  "rows": 8000,  "indexes": ["PRIMARY", "email_idx"], "size_mb": 15}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM orders WHERE user_id=? AND status=?", "avg_ms": 8500, "main_table": "orders", "rows_examined": 50000},
+      {"id": "q2", "sql": "SELECT COUNT(*) FROM orders o JOIN users u ON o.user_id=u.id WHERE u.country=?", "avg_ms": 3200, "main_table": "orders", "rows_examined": 50000}
+    ],
+    "missing_index_hints": [
+      {"table": "orders", "columns": ["user_id", "status"], "reason": "Composite WHERE filter"},
+      {"table": "users",  "columns": ["country"], "reason": "JOIN + WHERE filter on country"}
+    ],
+    "performance_score_baseline": 12.5,
+    "target_score": 75.0,
+    "max_steps": 25,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2",
+      "analyze_indexes:orders", "analyze_indexes:users",
+      "create_index:orders:user_id,status",
+      "create_index:users:country",
+      "analyze_statistics:orders",
+      "submit_report"
+    ],
+    "category": "multi_table"
+  },
+  {
+    "id": "medium_s002",
+    "description": "Blog platform: 100K posts + 20K authors. Search and author lookup queries both slow.",
+    "tables": [
+      {"name": "posts",   "rows": 100000, "indexes": ["PRIMARY"], "size_mb": 450},
+      {"name": "authors", "rows": 20000,  "indexes": ["PRIMARY"], "size_mb": 40}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM posts WHERE author_id=? AND published=1 ORDER BY created_at DESC", "avg_ms": 6000, "main_table": "posts", "rows_examined": 100000},
+      {"id": "q2", "sql": "SELECT * FROM authors WHERE username=?", "avg_ms": 2100, "main_table": "authors", "rows_examined": 20000}
+    ],
+    "missing_index_hints": [
+      {"table": "posts",   "columns": ["author_id", "published", "created_at"], "reason": "Multi-column filter + ORDER BY"},
+      {"table": "authors", "columns": ["username"], "reason": "Unique lookup by username"}
+    ],
+    "performance_score_baseline": 9.0,
+    "target_score": 78.0,
+    "max_steps": 25,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2",
+      "create_index:posts:author_id,published,created_at",
+      "create_index:authors:username",
+      "submit_report"
+    ],
+    "category": "multi_table"
+  },
+  {
+    "id": "medium_s003",
+    "description": "Inventory system: 80K products + 200K stock movements. Two queries needing index + rewrite.",
+    "tables": [
+      {"name": "products",        "rows": 80000,  "indexes": ["PRIMARY"], "size_mb": 200},
+      {"name": "stock_movements", "rows": 200000, "indexes": ["PRIMARY"], "size_mb": 600}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM stock_movements WHERE product_id=? AND movement_type=? AND created_at > ?", "avg_ms": 9000, "main_table": "stock_movements", "rows_examined": 200000},
+      {"id": "q2", "sql": "SELECT p.*, SUM(sm.quantity) FROM products p, stock_movements sm WHERE p.id = sm.product_id GROUP BY p.id", "avg_ms": 12000, "main_table": "products", "rows_examined": 200000}
+    ],
+    "missing_index_hints": [
+      {"table": "stock_movements", "columns": ["product_id", "movement_type", "created_at"], "reason": "Composite filter on 3 columns"},
+      {"table": "products", "columns": ["id"], "reason": "JOIN column — rewrite implicit JOIN to INNER JOIN"}
+    ],
+    "performance_score_baseline": 6.5,
+    "target_score": 72.0,
+    "max_steps": 30,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2",
+      "create_index:stock_movements:product_id,movement_type,created_at",
+      "rewrite_query:q2:SELECT p.id, p.name, SUM(sm.quantity) FROM products p INNER JOIN stock_movements sm ON p.id = sm.product_id GROUP BY p.id",
+      "analyze_statistics:stock_movements",
+      "submit_report"
+    ],
+    "category": "rewrite_and_index"
+  },
+  {
+    "id": "medium_s004",
+    "description": "Ticketing system: 60K tickets + 5K agents. Status queue and agent workload queries are slow.",
+    "tables": [
+      {"name": "tickets", "rows": 60000, "indexes": ["PRIMARY"], "size_mb": 180},
+      {"name": "agents",  "rows": 5000,  "indexes": ["PRIMARY"], "size_mb": 8}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM tickets WHERE status=? AND priority=? ORDER BY created_at ASC", "avg_ms": 5500, "main_table": "tickets", "rows_examined": 60000},
+      {"id": "q2", "sql": "SELECT agent_id, COUNT(*) as open_count FROM tickets WHERE status='open' GROUP BY agent_id", "avg_ms": 4200, "main_table": "tickets", "rows_examined": 60000}
+    ],
+    "missing_index_hints": [
+      {"table": "tickets", "columns": ["status", "priority", "created_at"], "reason": "Three-column filter with ORDER BY"},
+      {"table": "tickets", "columns": ["status", "agent_id"], "reason": "GROUP BY + WHERE filter"}
+    ],
+    "performance_score_baseline": 11.0,
+    "target_score": 76.0,
+    "max_steps": 25,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2",
+      "analyze_indexes:tickets",
+      "create_index:tickets:status,priority,created_at",
+      "create_index:tickets:status,agent_id",
+      "submit_report"
+    ],
+    "category": "multi_index"
+  },
+  {
+    "id": "medium_s005",
+    "description": "Analytics DB: 150K events + 10K users. Event funnel query and user lookup both need optimization.",
+    "tables": [
+      {"name": "events", "rows": 150000, "indexes": ["PRIMARY"], "size_mb": 700},
+      {"name": "users",  "rows": 10000,  "indexes": ["PRIMARY"], "size_mb": 20}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM events WHERE user_id=? AND event_type=? AND occurred_at BETWEEN ? AND ?", "avg_ms": 11000, "main_table": "events", "rows_examined": 150000},
+      {"id": "q2", "sql": "SELECT * FROM users WHERE signup_source=? AND created_at > ?", "avg_ms": 3000, "main_table": "users", "rows_examined": 10000}
+    ],
+    "missing_index_hints": [
+      {"table": "events", "columns": ["user_id", "event_type", "occurred_at"], "reason": "Range query on 3 columns"},
+      {"table": "users",  "columns": ["signup_source", "created_at"], "reason": "Composite filter on signup data"}
+    ],
+    "performance_score_baseline": 5.5,
+    "target_score": 74.0,
+    "max_steps": 30,
+    "optimal_actions": [
+      "inspect_query:q1", "inspect_query:q2",
+      "create_index:events:user_id,event_type,occurred_at",
+      "create_index:users:signup_source,created_at",
+      "analyze_statistics:events",
+      "submit_report"
+    ],
+    "category": "analytics"
+  }
+]

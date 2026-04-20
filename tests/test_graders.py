@@ -21,7 +21,7 @@ def test_easy_perfect_score():
 
 def test_null_action_returns_zero():
     score, breakdown, feedback = grade(None, "easy_001")
-    assert score == 0.0
+    assert score <= 0.001  # clamped minimum for OpenEnv compliance
     assert "null" in feedback.lower() or "no action" in feedback.lower()
 
 
@@ -29,7 +29,7 @@ def test_unknown_task_returns_zero():
     action = Action(action_type=ActionType.SUBMIT_ANSWER,
                     payload={"fixed_query": "SELECT 1", "explanation": "test"})
     score, _, _ = grade(action, "nonexistent_task_999")
-    assert score == 0.0
+    assert score <= 0.001 
 
 
 def test_determinism():
