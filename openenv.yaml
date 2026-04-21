@@ -2,6 +2,8 @@ name: sql-db-engineer-agent
 version: '2.0.0'
 description: 'SQL Database Engineer Agent — An OpenEnv environment where AI agents learn to act like senior database engineers. Evolved from SQL Query Debugger (Round 1). Agents manage production databases over 50+ steps: inspecting slow queries, creating indexes, rewriting queries, partitioning tables.'
 tags: [openenv, real-world, sql, database, engineering, indexing, reinforcement-learning, long-horizon, world-modeling, self-improvement, wildcard]
+hackathon: 'META x PyTorch x SST OpenEnv Hackathon 2026'
+domain: 'SQL Database Engineering'
 
 tasks:
   # ── Round 1: SQL Query Debugger (15 tasks — backward compatible) ──
@@ -172,7 +174,7 @@ reward:
 
 episode:
   max_steps: 50
-  termination: 'submit_report, submit_answer, optimize_query, or max_steps reached'
+  termination: 'submit_report (Round 2) or submit_answer/optimize_query (Round 1) or max_steps reached'
 
 api:
   port: 7860
