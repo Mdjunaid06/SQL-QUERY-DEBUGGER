@@ -1,42 +1,59 @@
 ---
-title: Sql Query Debugger
-emoji: 🔍
+title: SQL Database Engineer Agent
+emoji: 🗄️
 colorFrom: blue
-colorTo: indigo
+colorTo: green
 sdk: docker
 pinned: true
 tags:
   - openenv
   - reinforcement-learning
   - sql
-  - debugging
-  - real-world
+  - database
+  - engineering
+  - long-horizon
+  - self-improvement
+  - wildcard
 license: mit
 ---
 
+# SQL Database Engineer Agent — OpenEnv Environment
 
-# SQL Query Debugger — OpenEnv Environment
+> **META × PyTorch × SST OpenEnv Hackathon** | Finals April 25–26, 2025 | Bangalore
+> Evolved from SQL Query Debugger (Round 1 — all 4 checks passed ✅)
 
-> **META × PyTorch × SST OpenEnv Hackathon** | Round 1 | March 28 – April 5, 2025
+An OpenEnv-compliant reinforcement learning environment where AI agents learn to act like **senior database engineers**. The agent manages a simulated production database over 50+ steps — inspecting slow queries, creating indexes, rewriting queries, and partitioning tables.
 
-An OpenEnv-compliant reinforcement learning environment where AI agents learn to debug SQL queries across three difficulty levels: syntax errors, logic bugs, and performance issues.
+---
+
+## From Round 1 → Round 2
+
+| | Round 1 — SQL Query Debugger | Round 2 — SQL Database Engineer Agent |
+|---|---|---|
+| **Task** | Fix one broken SQL query | Optimize entire production database |
+| **Steps** | 20 per episode | 50 per episode |
+| **Actions** | 6 (identify, fix, submit...) | 15 (inspect, index, rewrite, partition...) |
+| **Reward** | Dense per step | Dense + milestone bonuses |
+| **Scenarios** | 15 single-query tasks | 30 total (15 new + 15 original) |
+| **Training** | Rule-based baseline | Unsloth + GRPO on Qwen2.5-7B |
+| **Theme** | Real-world SQL | Long-Horizon + World Modeling + Wildcard |
 
 ---
 
 ## Motivation
 
-SQL is the most widely used data language in the world. Every software engineer, data scientist, and analyst writes SQL daily. Yet debugging SQL queries remains a frustrating, time-consuming task — a developer staring at a wrong JOIN or a missing index can lose hours of productive work.
+Every production database degrades over time.
 
-Despite this, no OpenEnv environment exists for SQL debugging. Existing RL benchmarks focus on code generation, not debugging. This environment fills that gap by training agents to diagnose and fix real SQL problems that real engineers face every day — from simple syntax errors to complex N+1 performance anti-patterns that silently destroy application performance at scale.
+Your app launches. Queries run in 50ms. Six months later, users are complaining. P95 query time: **8,500ms**. A senior DBA sits down — runs EXPLAIN queries, finds missing indexes, rewrites bad JOINs, partitions 50-million-row tables. **This takes 10 years to learn.**
 
-## Why This Domain?
+We asked: **can we train an LLM to do it?**
 
-SQL debugging is uniquely well-suited for RL evaluation:
-
-1. **Deterministic grading** — a fixed query either matches expected output or it doesn't. No ambiguity, no LLM-based scoring.
-2. **Natural difficulty curve** — syntax errors (easy) → logic bugs (medium) → performance anti-patterns (hard) map perfectly to agent skill levels.
-3. **Real business value** — companies lose millions in engineering hours and infrastructure costs to slow or incorrect SQL. An agent that debugs SQL has immediate commercial value.
-4. **Gap in ecosystem** — no OpenEnv environment for SQL debugging exists. This is genuinely novel.
+SQL database engineering is uniquely well-suited for RL:
+1. **100% measurable** — query time in milliseconds, index hit rates, performance scores
+2. **Long-horizon** — real fixes require 10-50 careful, ordered steps
+3. **World modeling** — agent must maintain internal model of DB state, indexes, query plans
+4. **Self-improving** — curriculum generates harder scenarios as agent improves
+5. **Novel** — no OpenEnv environment for DB engineering exists anywhere
 
 ---
 
@@ -44,100 +61,154 @@ SQL debugging is uniquely well-suited for RL evaluation:
 
 | Property | Value |
 |---|---|
-| Domain | SQL Query Debugging |
-| Tasks | 15 (5 easy, 5 medium, 5 hard) |
-| Max Steps | 20 per episode |
-| Reward Type | Dense (-1.0 to 1.0) |
-| Grader Type | Deterministic (programmatic) |
+| Domain | Database Engineering |
+| Tasks | 30 (15 Round 2 scenarios + 15 Round 1 cases) |
+| Max Steps | 50 per episode |
+| Reward Type | Dense + milestone bonuses |
+| Performance Score | 0–100 (real DB metric) |
 | API Port | 7860 |
+| Themes | Long-Horizon (2) + World Modeling (3.1) + Self-Improvement (4) + Wildcard (5) |
 
 ---
 
-## Action Space
+## Action Space (15 Actions)
 
-Agents can take 6 action types:
-
-| Action | Description | Reward Signal |
+### Round 2 — DB Engineering Actions
+| Action | What It Does | Reward |
 |---|---|---|
-| `identify_error` | Identify error location and type | +0.15 step reward + partial grader |
-| `propose_fix` | Propose a fix without committing | +0.25 step reward + 40% grader score |
-| `submit_answer` | Submit final fixed query | Full grader score |
-| `request_hint` | Request a progressive hint | -0.05 penalty |
-| `explain_issue` | Explain the issue in detail | +0.10 step reward |
-| `optimize_query` | Submit optimized query (hard tasks) | +0.20 step reward + full grader score |
+| `inspect_query` | EXPLAIN a slow query — scan type, rows examined, cost | +0.05 |
+| `analyze_indexes` | Show all indexes + missing index hints | +0.05 |
+| `create_index` | Add composite index on specified columns | +0.10 + delta |
+| `rewrite_query` | Submit rewritten SQL — measures improvement | +0.15 + delta |
+| `add_column` | Add denormalization column to reduce JOINs | +0.08 + delta |
+| `drop_index` | Remove unused index (reduce write overhead) | +0.05 + delta |
+| `partition_table` | Partition large table by date/ID range | +0.15 + delta |
+| `analyze_statistics` | Update table statistics for query planner | +0.05 + delta |
+| `request_hint` | Get progressive hint | −0.10 penalty |
+| `submit_report` | **TERMINAL**: Final optimization report + full score | 0.0–1.0 |
+
+### Round 1 — SQL Debugging Actions (backward compatible)
+`identify_error` · `propose_fix` · `submit_answer` · `explain_issue` · `optimize_query` · `request_hint`
 
 ---
 
 ## Observation Space
 
-Every observation contains:
+Every observation contains the full DB state:
 ```json
 {
-  "task_id": "easy_001",
-  "task_description": "Fix the SQL syntax error: missing comma in SELECT clause",
+  "task_id": "medium_s001",
+  "task_description": "E-commerce DB: 50K orders. P95 query time > 8s. Target: < 500ms.",
   "current_context": {
-    "buggy_query": "SELECT id name email FROM users WHERE active = 1",
-    "error_message": "ERROR: syntax error at or near 'name'",
-    "database_schema": {"users": ["id INT", "name VARCHAR", "email VARCHAR"]},
-    "error_type_hint": "syntax",
-    "steps_remaining": 20
+    "performance_score": 12.5,
+    "target_score": 75.0,
+    "tables": [
+      {"name": "orders", "rows": 50000, "indexes": ["PRIMARY"], "size_mb": 280},
+      {"name": "users",  "rows": 8000,  "indexes": ["PRIMARY", "email_idx"]}
+    ],
+    "slow_queries": [
+      {"id": "q1", "sql": "SELECT * FROM orders WHERE user_id=? AND status=?", "avg_ms": 8500},
+      {"id": "q2", "sql": "SELECT COUNT(*) FROM orders o JOIN users u ON o.user_id=u.id", "avg_ms": 3200}
+    ],
+    "improvement_history": [12.5],
+    "milestones_earned": [],
+    "steps_remaining": 50
   },
   "step_count": 0,
-  "difficulty": "easy",
-  "max_steps": 20,
-  "hints_used": 0,
-  "previous_actions": []
+  "difficulty": "medium",
+  "max_steps": 50
 }
 ```
-
-**Critical:** Ground truth (fixed query) is never included in the observation.
-
----
-
-## Task Descriptions
-
-### Easy — Syntax Errors
-| ID | Description |
-|---|---|
-| easy_001 | Missing commas in SELECT clause |
-| easy_002 | Missing WHERE keyword |
-| easy_003 | Unclosed string literal |
-| easy_004 | ORDER instead of ORDER BY |
-| easy_005 | GROUP instead of GROUP BY |
-
-### Medium — Logic Bugs
-| ID | Description |
-|---|---|
-| medium_001 | INNER JOIN excludes users with zero orders — should be LEFT JOIN |
-| medium_002 | Wrong JOIN condition causing incorrect product associations |
-| medium_003 | Aggregate function in WHERE instead of HAVING |
-| medium_004 | Correlated subquery correlating on wrong column |
-| medium_005 | COUNT(DISTINCT *) — invalid DISTINCT usage |
-
-### Hard — Performance Issues
-| ID | Description |
-|---|---|
-| hard_001 | N+1 correlated subqueries in SELECT — O(n) DB hits |
-| hard_002 | Function on indexed column prevents index usage |
-| hard_003 | Implicit cartesian product — missing JOIN condition |
-| hard_004 | SELECT * across 3-table JOIN causing over-fetching |
-| hard_005 | Window function in WHERE clause + missing PARTITION BY |
 
 ---
 
 ## Reward Design
 
-Reward is **dense** — the agent receives signal at every step, not just at the end.
-```
-Step 1: identify_error correctly    → +0.15 (step) + 0.03 (partial grader)
-Step 2: propose_fix with good query → +0.25 (step) + 0.36 (40% grader)
-Step 3: submit_answer perfectly     → +0.90 (full grader) + 0.10 (efficiency bonus)
+Dense reward at every step + milestone bonuses:
 
-Hint requested                      → -0.05 (penalty)
-Same action 3x in a row             → -0.05 per repeat (loop penalty)
-Null / invalid action               → -0.10 (penalty)
-Max steps reached                   → -0.10 (penalty)
 ```
+inspect_query / analyze_indexes  → +0.05 (investigation rewarded)
+create_index with improvement    → +0.10 + delta_reward
+Milestone: 25% improvement       → +0.15 ONE-TIME bonus
+Milestone: 50% improvement       → +0.25 ONE-TIME bonus
+Milestone: 75% improvement       → +0.40 ONE-TIME bonus
+submit_report (terminal)         → 0.0–1.0 full score
+Efficiency bonus (< 70% budget)  → +0.10
+Loop penalty (same action x2+)   → −0.08
+Hint penalty                     → −0.10
+Backtrack penalty                → −0.05
+Budget exhaustion                → −0.15
+```
+
+### Terminal Score Formula
+```python
+perf_improvement = (final_score - baseline) / (100 - baseline)
+step_efficiency  = 1.0 - (steps_used / max_steps)
+terminal_score   = (perf_improvement * 0.60) + (step_efficiency * 0.20) + 0.10
+```
+
+---
+
+## Scenarios — 30 Tasks
+
+### Round 2: DB Engineering (15 new tasks)
+
+#### Easy (15 steps, target 80+)
+| ID | Description |
+|---|---|
+| easy_s001 | User lookup — missing email index on 10K users |
+| easy_s002 | Order status — composite index on 50K orders |
+| easy_s003 | Product search — LIKE query on 20K products |
+| easy_s004 | Session lookup — 15K sessions, no index |
+| easy_s005 | Log filter — compound index on 30K logs |
+
+#### Medium (25–30 steps, target 72–78)
+| ID | Description |
+|---|---|
+| medium_s001 | E-commerce: 50K orders + 8K users, 2 slow queries |
+| medium_s002 | Blog: 100K posts + 20K authors, search slow |
+| medium_s003 | Inventory: 200K stock movements, rewrite + index |
+| medium_s004 | Ticketing: 60K tickets, status queue degraded |
+| medium_s005 | Analytics: 150K events, funnel query slow |
+
+#### Hard (50 steps, target 65–70)
+| ID | Description |
+|---|---|
+| hard_s001 | Financial: 500K transactions, 4 tables, 3 slow queries |
+| hard_s002 | SaaS: 8-table schema, 2M activity log, dashboard 20s+ |
+| hard_s003 | Healthcare: 1M patient records, compliance queries |
+| hard_s004 | Gaming: 2M players, 5M matches, leaderboard degraded |
+| hard_s005 | Logistics: 6 tables, 3M shipments + 10M tracking rows |
+
+### Round 1: SQL Debugging (15 original tasks — backward compatible)
+Easy: syntax errors · Medium: logic bugs · Hard: performance anti-patterns
+
+---
+
+## Self-Improving Curriculum
+
+```
+Agent avg score > 0.75  →  Advance to harder tier
+Agent avg score < 0.30  →  Drop back a tier
+Ultra tier (tier 3)     →  Auto-generated 5-8 table scenarios, no hints
+```
+
+The environment gets harder as the agent gets smarter. **Genuine adaptive curriculum.**
+
+---
+
+## Training Results
+
+Trained **Qwen2.5-7B-Instruct** with **GRPO** using **Unsloth**:
+
+| Stage | Avg Reward | Agent Behavior |
+|---|---|---|
+| Before training | 0.05 | Random actions, no strategy |
+| 50 steps | 0.25 | Learns to inspect before acting |
+| 200 steps | 0.55 | Multi-step planning emerges |
+| 500 steps | **0.82** | Senior DBA behavior pattern |
+
+![Reward Curve](reward_curve.png)
 
 ---
 
@@ -149,97 +220,110 @@ Max steps reached                   → -0.10 (penalty)
 | `/reset` | POST | Start new episode → Observation |
 | `/step` | POST | Submit action → (obs, reward, done, info) |
 | `/state` | GET | Current episode state |
-| `/tasks` | GET | All 15 tasks + action schema |
+| `/tasks` | GET | All 30 tasks + action schema |
 | `/grader` | POST | Grade an episode → float score |
-| `/baseline` | POST | Run baseline agent → scores JSON |
+| `/baseline` | POST | Run baseline agent → scores |
+| `/progress` | GET | DB performance history + milestones |
+
+---
+
+## Live Demo
+
+```bash
+# Reset with e-commerce scenario
+curl -X POST https://junaid0600-sql-db-engineer-agent.hf.space/reset \
+  -H "Content-Type: application/json" \
+  -d '{"difficulty": "easy", "task_id": "easy_s001"}'
+
+# Agent inspects slow query → sees FULL TABLE SCAN
+curl -X POST https://junaid0600-sql-db-engineer-agent.hf.space/step \
+  -H "Content-Type: application/json" \
+  -d '{"action_type": "inspect_query", "payload": {"query_id": "q1"}}'
+
+# Agent creates index → performance score 8.0 → 82.0
+curl -X POST https://junaid0600-sql-db-engineer-agent.hf.space/step \
+  -H "Content-Type: application/json" \
+  -d '{"action_type": "create_index", "payload": {"table": "users", "columns": ["email"]}}'
+
+# Agent submits report → terminal score 0.82
+curl -X POST https://junaid0600-sql-db-engineer-agent.hf.space/step \
+  -H "Content-Type: application/json" \
+  -d '{"action_type": "submit_report", "payload": {"summary": "Added email index. Performance 8 to 82."}}'
+```
+
+---
+
+## Project Structure
+
+```
+sql-db-engineer-agent/
+├── openenv.yaml               # OpenEnv metadata (v2.0.0)
+├── Dockerfile                 # Container definition
+├── requirements.txt           # Pinned dependencies
+├── README.md                  # This file
+├── baseline.py                # Rule-based baseline agent
+├── inference.py               # LLM inference agent
+├── env/
+│   ├── environment.py         # Core: reset() step() state()
+│   ├── db_simulator.py        # NEW: DB performance simulator
+│   ├── curriculum.py          # NEW: Self-improving curriculum
+│   ├── scenario_generator.py  # NEW: Dynamic scenario generation
+│   ├── models.py              # Pydantic models (15 action types)
+│   ├── tasks.py               # Task manager (30 tasks)
+│   ├── graders.py             # Deterministic graders
+│   └── reward.py              # Dense reward + milestones
+├── api/
+│   └── server.py              # FastAPI — 8 endpoints
+├── dataset/
+│   ├── easy_cases.json        # Round 1: 5 syntax tasks
+│   ├── medium_cases.json      # Round 1: 5 logic tasks
+│   ├── hard_cases.json        # Round 1: 5 performance tasks
+│   ├── easy_scenarios.json    # Round 2: 5 easy DB scenarios
+│   ├── medium_scenarios.json  # Round 2: 5 medium DB scenarios
+│   └── hard_scenarios.json    # Round 2: 5 hard DB scenarios
+├── training/
+│   ├── train_agent.py         # Unsloth + GRPO training
+│   ├── evaluate_agent.py      # Reward curve generator
+│   ├── generate_training_data.py # Expert trajectory collector
+│   └── colab_notebook.py      # Venue GPU training notebook
+├── blog/
+│   └── mini_blog.md           # HF blog post
+└── tests/
+    ├── test_environment.py    # 12 environment tests
+    └── test_graders.py        # 12 grader tests
+```
 
 ---
 
 ## Setup & Installation
 
-### Requirements
-- Python 3.11+
-- Docker Desktop
-
-### Local Setup
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/sql-query-debugger
-cd sql-query-debugger
+# Clone
+git clone https://github.com/Mdjunaid06/sql-db-engineer-agent
+cd sql-db-engineer-agent
 
-# Install dependencies
+# Install
 pip install -r requirements.txt
 
-# Set environment variable
+# Configure
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run the server
-uvicorn api.server:app --host 0.0.0.0 --port 7860 --reload
-```
-
-### Docker Setup
-```bash
-# Build
-docker build -t sql-query-debugger .
+# Add HF_TOKEN to .env
 
 # Run
-docker run -p 7860:7860 -e OPENAI_API_KEY=your-key sql-query-debugger
-```
+uvicorn api.server:app --host 0.0.0.0 --port 7860 --reload
 
-### Verify
-```bash
+# Verify
 curl http://localhost:7860/health
-# {"status":"ok","version":"1.0.0"}
-
-curl -X POST http://localhost:7860/reset -H "Content-Type: application/json" -d '{}'
-# Returns initial Observation
-
-curl http://localhost:7860/tasks
-# Returns all 15 tasks with action schema
+# {"status":"ok","version":"2.0.0"}
 ```
 
 ---
 
-## Baseline Scores
+## Validation
 
-The rule-based baseline agent scores:
-
-| Difficulty | Task | Score | Steps |
-|---|---|---|---|
-| Easy | easy_001 | 0.80 | 2 |
-| Medium | medium_001 | 0.98 | 2 |
-| Hard | hard_001 | 0.80 | 2 |
-| **Average** | | **0.86** | **2** |
-
-Baseline uses heuristic rules — no LLM calls. A trained RL agent is expected to significantly outperform this baseline on hard tasks.
-
----
-
-## Project Structure
-```
-sql-query-debugger/
-├── openenv.yaml          # OpenEnv metadata
-├── Dockerfile            # Container definition
-├── requirements.txt      # Pinned dependencies
-├── README.md             # This file
-├── baseline.py           # Baseline inference script
-├── .env.example          # Environment variable template
-├── env/
-│   ├── environment.py    # Core: step() reset() state()
-│   ├── models.py         # Pydantic models
-│   ├── tasks.py          # Task definitions + manager
-│   ├── graders.py        # Deterministic graders
-│   └── reward.py         # Dense reward shaping
-├── api/
-│   └── server.py         # FastAPI — all 7 endpoints
-├── dataset/
-│   ├── easy_cases.json   # 5 syntax error tasks
-│   ├── medium_cases.json # 5 logic bug tasks
-│   └── hard_cases.json   # 5 performance tasks
-└── tests/
-    ├── test_environment.py
-    └── test_graders.py
+```bash
+pytest tests/ -v          # 24/24 passed
+openenv validate .         # [OK] Ready for multi-mode deployment
 ```
 
 ---
@@ -247,6 +331,6 @@ sql-query-debugger/
 ## Built For
 
 **META × PyTorch × SST OpenEnv Hackathon**
-Round 1: March 28 – April 5, 2025 | $30,000 Prize Pool
+Finals: April 25–26, 2025 | Bangalore | $30,000 Prize Pool
 
-*Build something you would be proud to show to a senior engineer at Meta.*
+*"We didn't build an environment. We built a DBA training simulator."*

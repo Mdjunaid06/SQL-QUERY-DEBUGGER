@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "sql-query-debugger"
-version = "1.0.0"
-description = "OpenEnv-compliant RL environment for SQL query debugging"
+name = "sql-db-engineer-agent"
+version = "2.0.0"
+description = "OpenEnv-compliant RL environment where AI agents learn to act like senior database engineers"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi==0.135.2",
@@ -16,11 +16,18 @@ dependencies = [
     "pytest==9.0.2",
     "huggingface_hub==1.8.0",
     "openenv-core>=0.2.0",
+    "matplotlib>=3.7.0",
+    "requests>=2.31.0",
 ]
 
 [project.scripts]
 server = "inference:main"
 
 [project.urls]
-Homepage = "https://huggingface.co/spaces/junaid0600/sql-query-debugger"
-Repository = "https://github.com/Mdjunaid06/SQL-QUERY-DEBUGGER"
+Homepage = "https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent"
+Repository = "https://github.com/Mdjunaid06/sql-db-engineer-agent"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
