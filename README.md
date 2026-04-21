@@ -19,7 +19,7 @@ license: mit
 
 # SQL Database Engineer Agent — OpenEnv Environment
 
-> **META × PyTorch × SST OpenEnv Hackathon** | Finals April 25–26, 2025 | Bangalore
+> **META × PyTorch × SST OpenEnv Hackathon** | Finals April 25–26, 2026 | Bangalore
 > Evolved from SQL Query Debugger (Round 1 — all 4 checks passed ✅)
 
 An OpenEnv-compliant reinforcement learning environment where AI agents learn to act like **senior database engineers**. The agent manages a simulated production database over 50+ steps — inspecting slow queries, creating indexes, rewriting queries, and partitioning tables.
@@ -331,6 +331,6 @@ openenv validate .         # [OK] Ready for multi-mode deployment
 ## Built For
 
 **META × PyTorch × SST OpenEnv Hackathon**
-Finals: April 25–26, 2025 | Bangalore | $30,000 Prize Pool
+Finals: April 25–26, 2026 | Bangalore 
 
 *"We didn't build an environment. We built a DBA training simulator."*
