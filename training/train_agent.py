@@ -13,6 +13,7 @@ FIXES applied:
 import os
 import re
 import json
+import warnings
 import requests
 from datasets import Dataset
 from collections import defaultdict
@@ -34,6 +35,7 @@ ENV_URL    = os.getenv("ENV_URL",    "https://junaid0600-sql-db-engineer-agent.h
 HF_TOKEN   = os.getenv("HF_TOKEN",  "")
 MODEL_NAME = os.getenv("MODEL_NAME", "unsloth/Qwen2.5-7B-Instruct")
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./sdea-trained")
+MAX_STEPS  = int(os.getenv("MAX_STEPS", "50"))
 
 # Valid Round 2 action types — model must use one of these
 VALID_ACTION_TYPES = {
@@ -64,6 +66,22 @@ Examples:
 {"action_type": "create_index", "payload": {"table": "users", "columns": ["email"]}}
 {"action_type": "create_index", "payload": {"table": "orders", "columns": ["user_id", "status"]}}
 {"action_type": "submit_report", "payload": {"summary": "Added composite index on orders(user_id, status). Performance improved from 5.0 to 85.0."}}"""
+
+
+def _configure_warning_filters() -> None:
+    """
+    Suppress noisy upstream deprecation warnings that do not affect training
+    correctness right now. Keep real runtime errors visible.
+    """
+    filters = [
+        r"Passing `generation_config` together with generation-related arguments",
+        r"Both `max_new_tokens` \(=.+\) and `max_length`\(.+\) seem to have been set",
+        r"The attention mask API under `transformers\.modeling_attn_mask_utils`",
+        r"`use_return_dict` is deprecated! Use `return_dict` instead!",
+    ]
+    for message in filters:
+        warnings.filterwarnings("ignore", message=message, category=FutureWarning)
+        warnings.filterwarnings("ignore", message=message, category=UserWarning)
 
 
 # ─────────────────────────────────────────────
@@ -359,6 +377,8 @@ def reward_wrapper(prompts, completions, **kwargs):
 # ─────────────────────────────────────────────
 
 def train():
+    _configure_warning_filters()
+
     if not UNSLOTH_AVAILABLE:
         print("Cannot train — Unsloth not installed")
         print("Run: pip install 'unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git' trl transformers datasets accelerate")
@@ -401,7 +421,9 @@ def train():
     # GRPO config
     config = GRPOConfig(
         output_dir                  = OUTPUT_DIR,
-        num_train_epochs            = 100,      # was 3  → now 100 → gives ~120 steps
+        # Set explicit optimizer steps so "Total steps" is predictable.
+        max_steps                   = MAX_STEPS,
+        num_train_epochs            = 100,      # ignored when max_steps is reached first
         per_device_train_batch_size = 1,        # was 2  → frees memory for 1.5B
         gradient_accumulation_steps = 2,        # was 8  → was hiding steps, now shows them
         learning_rate               = 2e-5,     # was 5e-5 → lower = more stable for small model
@@ -422,6 +444,7 @@ def train():
     )
 
     print("🏋️  Starting GRPO training...")
+    print(f"   Target optimizer steps: {MAX_STEPS}")
     print("   Expected reward progression:")
     print("   Steps  10: ~0.05-0.15 (model still outputting free text)")
     print("   Steps  50: ~0.20-0.35 (learning JSON format)")
