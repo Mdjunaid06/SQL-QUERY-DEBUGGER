@@ -13,6 +13,7 @@ FIXES applied:
 import os
 import re
 import json
+import warnings
 import requests
 from datasets import Dataset
 
@@ -24,6 +25,21 @@ try:
 except ImportError:
     UNSLOTH_AVAILABLE = False
     print("⚠️  Unsloth not available. Run: pip install unsloth trl")
+
+# Keep demo/training logs readable by silencing known upstream deprecation noise.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Both `max_new_tokens`.*and `max_length`.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*AttentionMaskConverter.*deprecated.*",
+    category=FutureWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*use_return_dict.*deprecated.*",
+)
 
 # ─────────────────────────────────────────────
 #  CONFIG
@@ -374,6 +390,9 @@ def train():
     # Avoid generation warnings from simultaneously using max_length and max_new_tokens.
     if hasattr(model, "generation_config"):
         model.generation_config.max_length = None
+    if hasattr(model, "config"):
+        # Some stacks still read generation defaults from model.config.
+        model.config.max_length = None
 
     config = GRPOConfig(
         output_dir                  = OUTPUT_DIR,
