@@ -328,7 +328,7 @@ def generate_plots(trainer):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
     fig.suptitle("GRPO Training — SQL Database Engineer Agent\n"
-                 "Qwen2.5-1.5B fine-tuned with Unsloth + TRL",
+                 "Qwen2.5-7B fine-tuned with Unsloth + TRL",
                  fontsize=13, fontweight="bold")
 
     # ── LEFT: Loss with smoothing ──────────────────────────────
