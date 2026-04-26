@@ -26,6 +26,17 @@ An OpenEnv-compliant reinforcement learning environment where AI agents learn to
 
 ---
 
+## 🔗 Quick Links
+
+| Resource | Link |
+|---|---|
+|  **Live Demo** | https://huggingface.co/spaces/junaid0600/sql-db-agent-demo-ui |
+|  **Training Notebook** | https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent/blob/main/SDEA_Training_Notebook.ipynb |
+|  **Blog Post** | https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent/blob/main/blog_post.md |
+|  **Source Code** | [HF Space]  | https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent/tree/main |
+|                  | [Git Repo] | https://github.com/Mdjunaid06/sql-db-engineer-agent |
+---
+
 ## From Round 1 → Round 2
 
 | | Round 1 — SQL Query Debugger | Round 2 — SQL Database Engineer Agent |
@@ -54,6 +65,49 @@ SQL database engineering is uniquely well-suited for RL:
 3. **World modeling** — agent must maintain internal model of DB state, indexes, query plans
 4. **Self-improving** — curriculum generates harder scenarios as agent improves
 5. **Novel** — no OpenEnv environment for DB engineering exists anywhere
+
+---
+
+## 📊 Training Results
+
+Trained **Qwen2.5-7B-Instruct** with **GRPO** using **Unsloth** (only 0.53% of parameters via LoRA):
+
+### GRPO Training Curves — 200 Steps
+
+![Demo](assets/loss_curve_demo.png)
+
+| Metric | Value |
+|---|---|
+| Training steps | 200 |
+| Loss | `4.92e-07 → 1.23e-05` |
+| Reward | `0.235 → 0.456` |
+| Improvement | **+94%** |
+| Model | Qwen2.5-7B (0.53% trainable via LoRA) |
+| Epochs | 29 |
+| Batch size | 8 (4 × 2 grad accum × 1 GPU) |
+
+> ⚠️ Note: GRPO policy loss rises as the model becomes more confident — this is expected behaviour, not divergence. The reward curve confirms consistent improvement.
+
+### Evaluation — Trained vs Random Agent (15 Scenarios)
+
+![Demo](assets/reward_curve_demo.png)
+
+| Agent | Avg Improvement | Best Scenario | Worst Scenario |
+|---|---|---|---|
+| Random (wrong index) | +0.0 pts | 0 pts | 0 pts |
+| Trained (GRPO) | **+31.4 pts** | **+59 pts** (Scenario 8 ) | +10 pts |
+
+- Trained agent outperformed random baseline on **every single scenario**
+- Scenario 8 flagged as outlier (±1.5σ) — agent found especially impactful index combination
+- Relative gain: **∞** (baseline scored exactly 0 on all scenarios)
+
+### Training Progression
+
+| Stage | Avg Reward | Agent Behavior |
+|---|---|---|
+| Before training | 0.05 | Random actions, no strategy |
+| 50 steps | 0.25 | Learns to inspect before acting |
+| 200 steps | **0.456** | Multi-step planning emerges |
 
 ---
 
@@ -140,6 +194,16 @@ Backtrack penalty                → −0.05
 Budget exhaustion                → −0.15
 ```
 
+### GRPO Reward Breakdown (Expected per action)
+```
+inspect_query / analyze_indexes       →  ~0.10
+create_index (no table/col match)     →  ~0.10
+create_index (partial hint match)     →  ~0.20–0.45
+create_index (perfect hint match)     →  ~0.55–0.80
+create_index (simulator confirms)     →  ~0.75–0.99
+Milestones: 25%=+0.15  50%=+0.25  75%=+0.40  (cumulative)
+```
+
 ### Terminal Score Formula
 ```python
 perf_improvement = (final_score - baseline) / (100 - baseline)
@@ -197,21 +261,6 @@ The environment gets harder as the agent gets smarter. **Genuine adaptive curric
 
 ---
 
-## Training Results
-
-Trained **Qwen2.5-7B-Instruct** with **GRPO** using **Unsloth**:
-
-| Stage | Avg Reward | Agent Behavior |
-|---|---|---|
-| Before training | 0.05 | Random actions, no strategy |
-| 50 steps | 0.25 | Learns to inspect before acting |
-| 200 steps | 0.55 | Multi-step planning emerges |
-| 500 steps | **0.82** | Senior DBA behavior pattern |
-
-![Reward Curve](reward_curve.png)
-
----
-
 ## API Endpoints
 
 | Endpoint | Method | Description |
@@ -224,6 +273,9 @@ Trained **Qwen2.5-7B-Instruct** with **GRPO** using **Unsloth**:
 | `/grader` | POST | Grade an episode → float score |
 | `/baseline` | POST | Run baseline agent → scores |
 | `/progress` | GET | DB performance history + milestones |
+| `/trained-agent` | POST | Run trained GRPO agent → steps + score |
+| `/trained-agent/status` | GET | Check if trained model is loaded |
+| `/demo` | GET | Live HTML demo UI |
 
 ---
 
@@ -256,41 +308,63 @@ curl -X POST https://junaid0600-sql-db-engineer-agent.hf.space/step \
 ## Project Structure
 
 ```
-sql-db-engineer-agent/
-├── openenv.yaml               # OpenEnv metadata (v2.0.0)
-├── Dockerfile                 # Container definition
-├── requirements.txt           # Pinned dependencies
-├── README.md                  # This file
-├── baseline.py                # Rule-based baseline agent
-├── inference.py               # LLM inference agent
-├── env/
-│   ├── environment.py         # Core: reset() step() state()
-│   ├── db_simulator.py        # NEW: DB performance simulator
-│   ├── curriculum.py          # NEW: Self-improving curriculum
-│   ├── scenario_generator.py  # NEW: Dynamic scenario generation
-│   ├── models.py              # Pydantic models (15 action types)
-│   ├── tasks.py               # Task manager (30 tasks)
-│   ├── graders.py             # Deterministic graders
-│   └── reward.py              # Dense reward + milestones
+sql-query-debugger/
+├── .env                          # Environment variables
+├── .env.example                  # Environment variables template
+├── .gitignore
+├── Dockerfile                    # Container definition
+├── README.md                     # This file
+├── blog_post.md                  # HF blog post (separate from README)
+├── loss_curve.png                # GRPO training curves ✅ evidence
+├── reward_curve.png              # Evaluation results ✅ evidence
+├── openenv.yaml                  # OpenEnv metadata (v2.0.0)
+├── pyproject.toml
+├── requirements.txt              # Pinned dependencies
+├── uv.lock
+├── baseline.py                   # Rule-based baseline agent
+├── demo_app.py                   # Gradio demo app
+├── inference.py                  # LLM inference agent
+│
 ├── api/
-│   └── server.py              # FastAPI — 8 endpoints
+│   ├── __init__.py
+│   └── server.py                 # FastAPI — 11 endpoints
+│
 ├── dataset/
-│   ├── easy_cases.json        # Round 1: 5 syntax tasks
-│   ├── medium_cases.json      # Round 1: 5 logic tasks
-│   ├── hard_cases.json        # Round 1: 5 performance tasks
-│   ├── easy_scenarios.json    # Round 2: 5 easy DB scenarios
-│   ├── medium_scenarios.json  # Round 2: 5 medium DB scenarios
-│   └── hard_scenarios.json    # Round 2: 5 hard DB scenarios
+│   ├── easy_cases.json           # Round 1: easy SQL tasks
+│   ├── easy_scenarios.json       # Round 2: easy DB scenarios
+│   ├── hard_cases.json           # Round 1: hard SQL tasks
+│   ├── hard_scenarios.json       # Round 2: hard DB scenarios
+│   ├── medium_cases.json         # Round 1: medium SQL tasks
+│   └── medium_scenarios.json     # Round 2: medium DB scenarios
+│
+├── env/
+│   ├── __init__.py
+│   ├── scenarios/                # Scenario definitions
+│   ├── curriculum.py             # Self-improving curriculum
+│   ├── db_simulator.py           # DB performance simulator
+│   ├── environment.py            # Core: reset() step() state()
+│   ├── graders.py                # Deterministic graders
+│   ├── models.py                 # Pydantic models (15 action types)
+│   ├── reward.py                 # Dense reward + milestones
+│   ├── scenario_generator.py     # Dynamic scenario generation
+│   └── tasks.py                  # Task manager (30 tasks)
+│
+├── sdea-trained/
+│   └── eval_results.json         # Evaluation results JSON
+│
 ├── training/
-│   ├── train_agent.py         # Unsloth + GRPO training
-│   ├── evaluate_agent.py      # Reward curve generator
+│   ├── colab_notebook.py         # Colab training notebook
+│   ├── evaluate_agent.py         # Evaluation + reward curve generator
+│   ├── generate_plots.py         # Fixed plot generator
 │   ├── generate_training_data.py # Expert trajectory collector
-│   └── colab_notebook.py      # Venue GPU training notebook
-├── blog/
-│   └── mini_blog.md           # HF blog post
+│   └── train_agent.py            # Unsloth + GRPO training script
+│
 └── tests/
-    ├── test_environment.py    # 12 environment tests
-    └── test_graders.py        # 12 grader tests
+    ├── __init__.py
+    ├── test_environment.py       # Environment tests
+    ├── test_graders.py           # Grader tests
+    ├── test_reward.py            # Reward tests
+    └── test_tasks.py             # Task tests
 ```
 
 ---
@@ -315,6 +389,9 @@ uvicorn api.server:app --host 0.0.0.0 --port 7860 --reload
 # Verify
 curl http://localhost:7860/health
 # {"status":"ok","version":"2.0.0"}
+
+# Open demo
+# http://localhost:7860/demo
 ```
 
 ---
