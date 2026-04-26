@@ -331,6 +331,7 @@ openenv validate .         # [OK] Ready for multi-mode deployment
 ## Built For
 
 **META × PyTorch × SST OpenEnv Hackathon**
-Finals: April 25–26, 2026 | Bangalore 
+Finals: April 25–26, 2026 | Bangalore
+
 
 *"We didn't build an environment. We built a DBA training simulator."*
