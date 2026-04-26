@@ -47,104 +47,43 @@ def status_icon(ok: bool) -> str:
 def check_all_endpoints():
     results = []
     total_pass = 0
-    total_tests = 12   # updated count
 
     # Health
     code, data = call_endpoint("GET", "/health")
     ok = code == 200 and data.get("status") == "ok"
     total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /health          → {code}")
+    results.append(f"{status_icon(ok)}  GET  /health          → {code}  |  version: {data.get('version','?')}  |  uptime: {data.get('uptime','?')}s")
 
     # Root
     code, data = call_endpoint("GET", "/")
     ok = code == 200
     total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /               → {code}")
+    results.append(f"{status_icon(ok)}  GET  /               → {code}  |  tasks: {data.get('tasks_count','?')}")
 
     # Tasks
     code, data = call_endpoint("GET", "/tasks")
-    ok = code == 200 and data.get("total", 0) >= 1
+    ok = code == 200 and data.get("total", 0) >= 15
     total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /tasks          → {code}")
+    results.append(f"{status_icon(ok)}  GET  /tasks          → {code}  |  total tasks: {data.get('total','?')}")
 
-    # Reset
+    # Reset easy
     code, data = call_endpoint("POST", "/reset", {"difficulty": "easy", "task_id": "easy_s001"})
-    ok = code == 200
+    ok = code == 200 and "task_id" in data
     total_pass += ok
-    results.append(f"{status_icon(ok)}  POST /reset          → {code}")
+    results.append(f"{status_icon(ok)}  POST /reset          → {code}  |  task: {data.get('task_id','?')}  |  perf_score: {data.get('current_context',{}).get('performance_score','?')}")
 
     # State
     code, data = call_endpoint("GET", "/state")
     ok = code == 200
     total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /state          → {code}")
+    results.append(f"{status_icon(ok)}  GET  /state          → {code}  |  step_count: {data.get('step_count','?')}  |  done: {data.get('done','?')}")
 
-    # Step
-    code, data = call_endpoint("POST", "/step", {
-        "action_type": "inspect_query",
-        "payload": {"query_id": "q1"}
-    })
+    # Step inspect
+    code, data = call_endpoint("POST", "/step", {"action_type": "inspect_query", "payload": {"query_id": "q1"}})
     ok = code == 200 and "reward" in data
     total_pass += ok
-    results.append(f"{status_icon(ok)}  POST /step           → {code}")
-
-    # Grader
-    action = {
-        "action_type": "submit_answer",
-        "payload": {
-            "fixed_query": "SELECT id, name FROM users WHERE active=1",
-            "explanation": "Fixed",
-            "confidence": 0.9
-        }
-    }
-    code, data = call_endpoint("POST", "/grader", {
-        "task_id": "easy_001",
-        "action": action
-    })
-    ok = code == 200
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  POST /grader         → {code}")
-
-    # Baseline
-    code, data = call_endpoint("POST", "/baseline", {})
-    ok = code == 200
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  POST /baseline       → {code}")
-
-    # Progress
-    code, data = call_endpoint("GET", "/progress")
-    ok = code == 200
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /progress       → {code}")
-
-    # ─────────────────────────────────────────────
-    # NEW ENDPOINTS
-    # ─────────────────────────────────────────────
-
-    # Trained agent status
-    code, data = call_endpoint("GET", "/trained-agent/status")
-    ok = code == 200 and "loaded" in data
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /trained-agent/status → {code}  |  loaded: {data.get('loaded','?')}")
-
-    # Trained agent run
-    code, data = call_endpoint("POST", "/trained-agent", {
-        "task_id": "easy_001"
-    })
-    ok = code == 200 and "score" in data
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  POST /trained-agent  → {code}  |  score: {data.get('score','?')}")
-
-    # Demo UI
-    code, data = call_endpoint("GET", "/demo")
-    ok = code == 200
-    total_pass += ok
-    results.append(f"{status_icon(ok)}  GET  /demo           → {code}")
-
-    # Summary
-    summary = f"\n{'='*60}\n{total_pass}/{total_tests} endpoints passing  {'🟢 ALL GOOD' if total_pass == total_tests else '🔴 SOME FAILING'}\n{'='*60}"
-    
-    return "\n".join(results) + summary
+    reward = data.get("reward", {}).get("score", "?") if isinstance(data.get("reward"), dict) else "?"
+    results.append(f"{status_icon(ok)}  POST /step           → {code}  |  action: inspect_query  |  reward: {reward}")
 
     # Grader
     action = {"action_type": "submit_answer", "payload": {"fixed_query": "SELECT id, name FROM users WHERE active=1", "explanation": "Fixed", "confidence": 0.9}}
@@ -166,7 +105,31 @@ def check_all_endpoints():
     total_pass += ok
     results.append(f"{status_icon(ok)}  GET  /progress       → {code}  |  perf_score: {data.get('performance_score','?')}  |  baseline: {data.get('baseline_score','?')}")
 
-    summary = f"\n{'='*60}\n{total_pass}/9 endpoints passing  {'🟢 ALL GOOD' if total_pass == 9 else '🔴 SOME FAILING'}\n{'='*60}"
+     # Trained agent status
+    code, data = call_endpoint("GET", "/trained-agent/status")
+    ok = code == 200 and "loaded" in data
+    total_pass += ok
+    results.append(f"{status_icon(ok)}  GET  /trained-agent/status → {code}  |  loaded: {data.get('loaded','?')}")
+
+    # Trained agent run
+    code, data = call_endpoint("POST", "/trained-agent", {
+        "task_id": "easy_001"
+    })
+    ok = code == 200 and "score" in data
+    total_pass += ok
+    results.append(f"{status_icon(ok)}  POST /trained-agent  → {code}  |  score: {data.get('score','?')}")
+
+    # Demo UI
+    code, data = call_endpoint("GET", "/demo")
+    ok = code == 200
+    total_pass += ok
+    results.append(f"{status_icon(ok)}  GET  /demo           → {code}")
+
+
+
+     # Summary
+    summary = f"\n{'='*60}\n{total_pass}/{total_tests} endpoints passing  {'🟢 ALL GOOD' if total_pass == total_tests else '🔴 SOME FAILING'}\n{'='*60}"
+    
     return "\n".join(results) + summary
 
 # ─────────────────────────────────────────────
