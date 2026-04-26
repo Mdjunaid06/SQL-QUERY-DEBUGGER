@@ -177,6 +177,7 @@ Try the agent yourself — pick a scenario difficulty, choose between the traine
 |             | HF Repo - https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent/tree/main |
 |             |
 |Training Run Notebook URL| https://huggingface.co/spaces/junaid0600/sql-db-engineer-agent/blob/main/SDEA_Training_Notebook.ipynb 
+|Google Collab| https://colab.research.google.com/drive/1dTRcnVb9VotCFUnGeZSacaznb4fn_PD7?usp=sharing |
 
 ---
 
